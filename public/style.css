@@ -576,3 +576,9 @@ html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
 .humano.erro{border-color:var(--err)}.humano.erro .tx{color:var(--err)}
 .humano .spin{width:14px;height:14px;border:2.5px solid color-mix(in srgb,var(--a) 25%,transparent);border-top-color:var(--a);border-radius:50%;animation:giro .7s linear infinite}
 @keyframes giro{to{transform:rotate(360deg)}}
+
+/* papel Produção: quadro com poucas etapas e botões do cartão */
+.board.n1{grid-template-columns:minmax(240px,460px)}.board.n2{grid-template-columns:repeat(2,minmax(240px,1fr))}.board.n3{grid-template-columns:repeat(3,minmax(240px,1fr))}.board.n4{grid-template-columns:repeat(4,minmax(240px,1fr))}
+.kcard .kact{display:flex;gap:8px;margin-top:10px}.kcard .kact .go{flex:1;width:auto}.kcard .kact .back{flex:none}
+.etapasel{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;max-width:340px}.etapasel small{flex:0 0 100%;color:var(--mut);font-size:12px}.etapasel small.warn{color:var(--err);font-weight:600}
+.etapasel .ck{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;white-space:nowrap}

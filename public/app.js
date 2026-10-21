@@ -66,6 +66,11 @@ const ETAPAS = [
 ];
 const etapa = s => ETAPAS.find(e => e.s === s) || { s, i: 'clipboard' };
 const PROX = Object.fromEntries(ETAPAS.slice(0, 4).map((e, i) => [e.s, ETAPAS[i + 1].s]));
+const ANT = Object.fromEntries(ETAPAS.slice(1).map((e, i) => [e.s, ETAPAS[i].s]));
+// papel "producao": so enxerga as etapas que o administrador liberou e anda uma etapa para frente ou para tras
+const ehProd = () => ME.papel === 'producao';
+const etapasVisiveis = () => ehProd() ? ETAPAS.filter(e => ME.etapas.includes(e.s)) : ETAPAS;
+const podeAvancar = o => !!PROX[o.status] && (!ehProd() || PROX[o.status] !== 'Entregue' || ME.etapas.includes('Entregue'));
 const pill = s => h('span', { class: 'pill st-' + slug(s), text: s });
 
 // ---------- tema / toast / dialogo ----------
@@ -173,7 +178,7 @@ function renderLogin(msg) {
 
 // ---------- shell ----------
 function shell(ativo, conteudo) {
-  const links = [['painel', 'Painel', 'home'], ['ordens', 'Ordens', 'board'], ['clientes', 'Clientes', 'building'], ['relatorio', 'Relatório', 'chart']];
+  const links = ehProd() ? [['ordens', 'Ordens', 'board']] : [['painel', 'Painel', 'home'], ['ordens', 'Ordens', 'board'], ['clientes', 'Clientes', 'building'], ['relatorio', 'Relatório', 'chart']];
   if (ME.papel === 'admin') links.push(['usuarios', 'Usuários', 'users']);
   const papel = { admin: 'Administrador', escritorio: 'Escritório', producao: 'Produção' }[ME.papel];
   const cnt = h('span', { class: 'cnt', hidden: true }), syncTxt = h('div', {}, 'Verificando…'), syncDot = h('span', { class: 'dot off' });
@@ -182,15 +187,16 @@ function shell(ativo, conteudo) {
   const side = h('aside', { class: 'side' },
     h('div', { class: 'brand' }, logoImg('lgs auto'), h('small', { text: 'Ordem de Produção' + (CFG.versao ? ' · v' + CFG.versao : '') })),
     h('nav', {}, links.map(([k, t, i]) => h('a', { href: '#/' + k, class: ativo === k ? 'on' : '' }, ic(i, 19), t, k === 'ordens' ? cnt : null))),
-    h('div', { class: 'sp' }), h('div', { class: 'sync' }, syncDot, syncTxt),
+    h('div', { class: 'sp' }), ehProd() ? null : h('div', { class: 'sync' }, syncDot, syncTxt),
     h('div', { class: 'usercard' }, h('div', { class: 'avatar', text: iniciais(ME.usuario) }), h('div', {}, h('b', { text: ME.usuario.toLowerCase() }), h('small', { text: papel })), h('div', { class: 'ib' }, botTema, botSair)));
   const mtop = h('div', { class: 'mtop' }, logoImg('lgt auto'), h('b', { text: 'Ordem de Produção' }),
     h('div', { class: 'ib' }, h('button', { onclick: alternaTema }, ic('moon', 18)), h('button', { onclick: sair }, ic('logout', 18))));
   const tab = h('nav', { class: 'tabbar' }, links.map(([k, t, i]) => h('a', { href: '#/' + k, class: ativo === k ? 'on' : '' }, ic(i, 22), t)));
   $app.replaceChildren(h('div', { class: 'layout' }, side, h('div', {}, mtop, h('main', { class: 'content fade' }, conteudo))), tab);
   api('GET', '/api/resumo').then(r => {
-    const n = r.porStatus.filter(x => ['Aberta', 'Em extrusão', 'Em corte e solda'].includes(x.status)).reduce((a, x) => a + x.n, 0);
+    const n = r.porStatus.filter(x => ehProd() ? x.status !== 'Entregue' : ['Aberta', 'Em extrusão', 'Em corte e solda'].includes(x.status)).reduce((a, x) => a + x.n, 0);
     if (n) { cnt.textContent = n; cnt.hidden = false; }
+    if (!r.sync) return;
     const sy = r.sync, velho = sy.ultimoOk && Date.now() - Date.parse(sy.ultimoOk) > 3600e3;
     syncDot.className = 'dot' + (!sy.ativo || velho ? ' off' : sy.erro ? ' err' : '');
     syncTxt.textContent = !sy.ativo ? 'Serp: aguardando 1ª sincronização' : sy.erro ? 'Serp: falha na última leitura' : `Serp · ${num(sy.clientes)} clientes · ${atras(sy.ultimoOk)}`;
@@ -273,7 +279,8 @@ function tabelaOrdens(linhas, opc = {}) {
 }
 function cartao(o, recarrega) {
   const pct = o.qtd_kg ? Math.min(100, Math.round(((o.corte_kg || 0) / o.qtd_kg) * 100)) : 0, prox = PROX[o.status];
-  const pode = prox && (ME.papel !== 'producao' || prox !== 'Entregue') && o.status !== 'Entregue';
+  const pode = podeAvancar(o), ant = ehProd() ? ANT[o.status] : null;
+  const mover = novo => async e => { e.stopPropagation(); try { await api('PUT', '/api/ordens/' + o.id, { status: novo }); toast(`OP ${o.numero}: ${novo}`); recarrega(); } catch (x) { toast(x.message, 'erro'); } };
   return h('div', { class: 'kcard st-' + slug(o.status), draggable: !TOQUE, onclick: () => (location.hash = '#/ordem/' + o.id),
     ondragstart: e => { e.dataTransfer.setData('text/plain', o.id + '|' + o.status); e.dataTransfer.effectAllowed = 'move'; e.currentTarget.classList.add('dragging'); },
     ondragend: e => e.currentTarget.classList.remove('dragging') },
@@ -282,7 +289,9 @@ function cartao(o, recarrega) {
     h('div', { class: 'tags' }, [o.litros ? o.litros + ' L' : null, o.reforco, o.formato].filter(Boolean).map(t => h('span', { class: 'tag', text: t })), o.grupo_n > 1 ? h('span', { class: 'tag grp' }, ic('link', 11), 'grupo ' + o.grupo_n) : null),
     h('div', { class: 'meta' }, h('span', { text: [medidas(o), o.cor].filter(Boolean).join(' · ') }), h('span', { class: 'num', text: o.qtd_kg != null ? kg(o.qtd_kg) + ' kg' : '' })),
     o.qtd_kg ? h('div', { class: 'mini' }, h('i', { style: { width: pct + '%' } })) : null,
-    pode ? h('button', { class: 'btn sm go', style: { marginTop: '10px' }, onclick: async e => { e.stopPropagation(); try { await api('PUT', '/api/ordens/' + o.id, { status: prox }); toast(`OP ${o.numero}: ${prox}`); recarrega(); } catch (x) { toast(x.message, 'erro'); } } }, etapa(o.status).acao, ic('right', 15)) : null);
+    pode || ant ? h('div', { class: 'kact' },
+      ant ? h('button', { class: 'btn sm ghost back', title: 'Voltar para ' + ant, 'aria-label': 'Voltar para ' + ant, onclick: mover(ant) }, ic('left', 15), 'Voltar') : null,
+      pode ? h('button', { class: 'btn sm go', onclick: mover(prox) }, etapa(o.status).acao, ic('right', 15)) : null) : null);
 }
 // quadro: limite de cartoes por coluna (configuravel) e arrastar para mudar de etapa
 const TOQUE = matchMedia('(pointer:coarse)').matches;   /* mobile */
@@ -291,8 +300,9 @@ const limiteColuna = () => { const n = Number(lsGet('op_limcol')); return LIMITE
 let ETAPA_MOB = null;   /* mobile3 */
 function quadro(linhas, recarrega) {
   const lim = limiteColuna();
-  if (!ETAPA_MOB) ETAPA_MOB = (ETAPAS.find(e => linhas.some(o => o.status === e.s)) || ETAPAS[0]).s;
-  const board = h('div', { class: 'board' }, ETAPAS.map(e => {
+  const ET = etapasVisiveis();
+  if (!ET.some(e => e.s === ETAPA_MOB)) ETAPA_MOB = (ET.find(e => linhas.some(o => o.status === e.s)) || ET[0] || ETAPAS[0]).s;
+  const board = h('div', { class: 'board n' + ET.length }, ET.map(e => {
     const todas = linhas.filter(o => o.status === e.s), vis = MOSTRAR[e.s] || lim, l = todas.slice(0, vis);
     const col = h('div', { class: 'col st-' + slug(e.s) },
       h('h4', {}, ic(e.i, 17), e.s, h('span', { class: 'cn', text: todas.length })),
@@ -310,11 +320,11 @@ function quadro(linhas, recarrega) {
     });
     return col;
   }));
-  const abas = h('div', { class: 'stabs' }, ETAPAS.map(e => h('button', { type: 'button', class: 'stab st-' + slug(e.s), onclick: () => { ETAPA_MOB = e.s; aplica(); } },
+  const abas = h('div', { class: 'stabs' }, ET.map(e => h('button', { type: 'button', class: 'stab st-' + slug(e.s), onclick: () => { ETAPA_MOB = e.s; aplica(); } },
     h('span', { class: 'cn', text: linhas.filter(o => o.status === e.s).length }), e.s)));
   const aplica = () => {
-    abas.querySelectorAll('.stab').forEach((b, i) => b.classList.toggle('on', ETAPAS[i].s === ETAPA_MOB));
-    board.querySelectorAll('.col').forEach((c, i) => c.classList.toggle('ativa', ETAPAS[i].s === ETAPA_MOB));
+    abas.querySelectorAll('.stab').forEach((b, i) => b.classList.toggle('on', ET[i].s === ETAPA_MOB));
+    board.querySelectorAll('.col').forEach((c, i) => c.classList.toggle('ativa', ET[i].s === ETAPA_MOB));
   };
   aplica();
   return h('div', { class: 'bwrap' }, abas, board);
@@ -340,7 +350,7 @@ async function viewOrdens(qs) {
     if (modo === 'lista') { box.replaceChildren(tabelaOrdens(r.linhas, { selecionavel: ME.papel !== 'producao', onSel: atualizaSel })); pagEl.replaceChildren(pager(pg, r.total, carrega)); }
     else { pagEl.replaceChildren(); box.replaceChildren(quadro(r.linhas, carrega)); }
   }
-  const pintaChips = () => chipsEl.replaceChildren(...CFG.status.map(s => h('button', { class: 'chip st-' + slug(s) + (st.has(s) ? ' on' : ''), onclick: () => { st.has(s) ? st.delete(s) : st.add(s); pintaChips(); filtra(); } }, s, h('span', { class: 'cn', text: porSt[s] || 0 }))));
+  const pintaChips = () => chipsEl.replaceChildren(...CFG.status.filter(s => !ehProd() || ME.etapas.includes(s)).map(s => h('button', { class: 'chip st-' + slug(s) + (st.has(s) ? ' on' : ''), onclick: () => { st.has(s) ? st.delete(s) : st.add(s); pintaChips(); filtra(); } }, s, h('span', { class: 'cn', text: porSt[s] || 0 }))));
   pintaChips();
   const limSel = h('select', { class: 'sel', 'aria-label': 'Cartões por coluna', onchange: e => { lsSet('op_limcol', e.target.value); Object.keys(MOSTRAR).forEach(k => delete MOSTRAR[k]); carrega(); } },
     LIMITES_COLUNA.map(n => h('option', { value: n, text: n + ' por coluna', selected: n === limiteColuna() })));
@@ -356,7 +366,7 @@ async function viewOrdens(qs) {
   const de = h('input', { type: 'date', value: f.de, onchange: e => { f.de = e.target.value; filtra(); } }), ate = h('input', { type: 'date', value: f.ate, onchange: e => { f.ate = e.target.value; filtra(); } });
   chipsEl.hidden = modo !== 'lista'; limEl.hidden = modo !== 'quadro';
   const dicaEl = h('div', { class: 'sub', style: { margin: '-4px 2px 12px' }, hidden: modo !== 'quadro', text: TOQUE ? 'Escolha a etapa acima. Toque no botão do cartão para avançar a OP.' : 'Arraste um cartão para outra coluna para mudar a etapa da OP.' });
-  shell('ordens', [pageHead('Ordens de produção', 'Acompanhe cada pedido da extrusão à entrega.', [csvBtn, ME.papel !== 'producao' ? h('a', { class: 'btn', href: '#/ordem/lote' }, ic('copy', 17), 'Lançar várias') : null, ME.papel !== 'producao' ? h('a', { class: 'btn pri', href: '#/ordem/novo' }, ic('plus', 18), 'Nova OP') : null]),
+  shell('ordens', [pageHead('Ordens de produção', ehProd() ? (ME.etapas.length ? 'Suas etapas: ' + ME.etapas.join(', ') + '.' : 'Nenhuma etapa liberada para você. Fale com o administrador.') : 'Acompanhe cada pedido da extrusão à entrega.', [ehProd() ? null : csvBtn, ME.papel !== 'producao' ? h('a', { class: 'btn', href: '#/ordem/lote' }, ic('copy', 17), 'Lançar várias') : null, ME.papel !== 'producao' ? h('a', { class: 'btn pri', href: '#/ordem/novo' }, ic('plus', 18), 'Nova OP') : null]),
     h('div', { class: 'tools' }, seg, limEl, h('div', { class: 'inp search' }, ic('search', 18), busca), h('div', { class: 'inp' }, de), h('span', { class: 'sub', text: 'até' }), h('div', { class: 'inp' }, ate)),
     f.grupo ? h('div', { class: 'note' }, ic('link', 18), 'Mostrando só o grupo ' + f.grupo + '. ', h('a', { href: '#/ordens' }, 'Ver todas as OPs')) : null,
     chipsEl, dicaEl, tot, box, pagEl, barSel]);
@@ -397,7 +407,8 @@ async function viewOrdem(id, qs) {
   const o = nova ? { data: hoje(), produto: 'Saco p/ lixo', status: 'Aberta', historico: [] } : await api('GET', '/api/ordens/' + id);
   if (nova && qs) { const c = new URLSearchParams(qs).get('cliente'); if (c) { try { const r = await api('GET', '/api/clientes/' + c); o.cliente_cod = r.cliente.cod; o.cliente_nome = r.cliente.nome; } catch { /* segue sem vincular */ } } }
   const irmas = !nova && o.grupo_n > 1 ? (await api('GET', '/api/ordens?grupo=' + o.grupo + '&limite=100')).linhas.reverse() : [];
-  const prod = ME.papel === 'producao', bloq = o.status === 'Cancelada' && ME.papel !== 'admin', dEsc = prod || bloq, dProd = bloq;
+  const prod = ehProd(), bloq = o.status === 'Cancelada' && ME.papel !== 'admin', dEsc = prod || bloq;
+  const dExt = bloq || (prod && o.status !== 'Em extrusão'), dCor = bloq || (prod && o.status !== 'Em corte e solda');   // producao preenche so a etapa em que a OP esta
   const E = { ...o };
   const campo = (rot, k, op = {}) => {
     const dis = op.dis !== undefined ? op.dis : dEsc;
@@ -414,6 +425,7 @@ async function viewOrdem(id, qs) {
     try {
       const corpo = { ...E, ...extra }; for (const k of ['historico', 'id', 'numero', 'criado_em', 'criado_por', 'atualizado_em', 'atualizado_por']) delete corpo[k];
       const r = nova ? await api('POST', '/api/ordens', corpo) : await api('PUT', '/api/ordens/' + id, corpo);
+      if (!nova && prod && !ME.etapas.includes(r.status)) { toast(`OP ${r.numero} enviada para ${r.status}`); location.hash = '#/ordens'; return; }   // saiu das etapas do usuario: some da lista dele
       toast('OP ' + r.numero + ' salva'); if (nova) location.hash = '#/ordem/' + r.id; else viewOrdem(id);
     } catch (e) { toast(e.message, 'erro'); }
   }
@@ -427,9 +439,9 @@ async function viewOrdem(id, qs) {
   const stepper = h('div', {}, ETAPAS.map((e, i) => h('div', { class: `step st-${slug(e.s)} ${nova ? (i === 0 ? 'cur' : '') : (cancelada ? '' : i < idx ? 'done' : i === idx ? 'cur' : '')}` },
     h('div', { class: 'bub' }, (!nova && !cancelada && i < idx) ? ic('check', 16) : ic(e.i, 16)), h('div', {}, h('b', { text: e.s }), h('small', { text: !nova && i === idx ? 'Etapa atual' : '' })))));
   const prox = PROX[o.status];
-  const stSel = h('select', { class: 'sel', disabled: bloq || nova, style: { width: '100%' }, onchange: e => (E.status = e.target.value) }, CFG.status.filter(s => !prod || ['Em extrusão', 'Em corte e solda', 'Pronta'].includes(s) || s === o.status).map(s => h('option', { value: s, text: s, selected: s === E.status })));
+  const stSel = h('select', { class: 'sel', disabled: bloq || nova, style: { width: '100%' }, onchange: e => (E.status = e.target.value) }, CFG.status.filter(s => !prod || s === o.status || (s === PROX[o.status] && podeAvancar(o)) || s === ANT[o.status]).map(s => h('option', { value: s, text: s, selected: s === E.status })));
   const savebar = h('div', { class: 'savebar' },
-    !nova && prox && (!prod || prox !== 'Entregue') ? h('button', { class: 'btn', disabled: bloq, onclick: () => salvar({ status: prox }) }, etapa(o.status).acao, ic('right', 17)) : null,
+    !nova && podeAvancar(o) ? h('button', { class: 'btn', disabled: bloq, onclick: () => salvar({ status: prox }) }, etapa(o.status).acao, ic('right', 17)) : null,
     h('button', { class: 'btn pri', disabled: bloq, onclick: () => salvar() }, ic('check', 18), 'Salvar'));
   const aside = h('aside', {},
     h('div', { class: 'card' }, h('h3', { text: 'Andamento' }), nova ? h('div', { class: 'sub', style: { marginBottom: '14px' }, text: 'A OP começa como "Aberta". O número é gerado ao salvar.' }) : null, stepper,
@@ -437,7 +449,8 @@ async function viewOrdem(id, qs) {
       o.entregue_em ? h('div', { class: 'sub', style: { marginTop: '12px' }, text: 'Entregue em ' + dt(o.entregue_em) }) : null,
       h('div', { class: 'actions' },
         h('button', { class: 'btn pri', disabled: bloq, onclick: () => salvar() }, ic('check', 18), 'Salvar'),
-        !nova && prox && (!prod || prox !== 'Entregue') ? h('button', { class: 'btn', disabled: bloq, onclick: () => salvar({ status: prox }) }, etapa(o.status).acao, ic('right', 17)) : null,
+        !nova && podeAvancar(o) ? h('button', { class: 'btn', disabled: bloq, onclick: () => salvar({ status: prox }) }, etapa(o.status).acao, ic('right', 17)) : null,
+        !nova && prod && ANT[o.status] ? h('button', { class: 'btn', onclick: () => salvar({ status: ANT[o.status] }) }, ic('left', 17), 'Voltar para ' + ANT[o.status].toLowerCase()) : null,
         !nova ? h('button', { class: 'btn', onclick: () => imprimeFicha({ ...E, numero: o.numero }) }, ic('print', 17), 'Imprimir ficha') : null,
         !nova && !prod && o.status !== 'Cancelada' && o.status !== 'Entregue' ? h('button', { class: 'btn danger ghost', onclick: async () => { if (await confirmar('Cancelar esta OP?', `A OP ${o.numero} ficará como cancelada e deixará de entrar nos totais.`, 'Cancelar OP')) salvar({ status: 'Cancelada' }); } }, 'Cancelar OP') : null),
       !nova ? h('label', { class: 'field', style: { marginTop: '16px' } }, h('span', { class: 'l', text: 'Alterar status manualmente' }), stSel) : null),
@@ -456,8 +469,8 @@ async function viewOrdem(id, qs) {
         h('div', { class: 'row' }, campo('Largura', 'largura', { dec: 1, suf: 'cm' }), campo('Comprimento', 'comprimento', { dec: 1, suf: 'cm' }), campo('Espessura', 'espessura', { dec: 1 }), campo('Gramatura', 'gramatura', { dec: 1 }), campo('Cor', 'cor'),
           campo('Qnt de pacote', 'qtd_pacote', { int: 1, suf: 'pct' }), campo('Qnt de Kg', 'qtd_kg', { dec: 1, suf: 'kg' })),
         h('label', { class: 'field', style: { marginTop: '14px' } }, h('span', { class: 'l', text: 'Obs.' }), h('textarea', { class: 'ta', disabled: dEsc, oninput: e => (E.obs = e.target.value) }, E.obs || ''))),
-      h('div', { class: 'card pcard' }, h('h3', {}, h('span', { class: 'ico' }, ic('layers', 17)), 'Extrusão'), h('div', { class: 'row' }, campo('Qnt de bobina', 'ext_bobinas', { int: 1, dis: dProd }), campo('Kg total', 'ext_kg', { dec: 1, suf: 'kg', dis: dProd }), campo('Extrusor', 'ext_extrusor', { dis: dProd }))),
-      h('div', { class: 'card pcard' }, h('h3', {}, h('span', { class: 'ico' }, ic('scissors', 17)), 'Corte e solda'), h('div', { class: 'row' }, campo('Pacotes', 'corte_pacotes', { int: 1, suf: 'pct', dis: dProd }), campo('Kg total', 'corte_kg', { dec: 1, suf: 'kg', dis: dProd }), campo('Aparas', 'corte_aparas_kg', { dec: 1, suf: 'kg', dis: dProd })))), aside), savebar]);
+      h('div', { class: 'card pcard' }, h('h3', {}, h('span', { class: 'ico' }, ic('layers', 17)), 'Extrusão'), h('div', { class: 'row' }, campo('Qnt de bobina', 'ext_bobinas', { int: 1, dis: dExt }), campo('Kg total', 'ext_kg', { dec: 1, suf: 'kg', dis: dExt }), campo('Extrusor', 'ext_extrusor', { dis: dExt }))),
+      h('div', { class: 'card pcard' }, h('h3', {}, h('span', { class: 'ico' }, ic('scissors', 17)), 'Corte e solda'), h('div', { class: 'row' }, campo('Pacotes', 'corte_pacotes', { int: 1, suf: 'pct', dis: dCor }), campo('Kg total', 'corte_kg', { dec: 1, suf: 'kg', dis: dCor }), campo('Aparas', 'corte_aparas_kg', { dec: 1, suf: 'kg', dis: dCor })))), aside), savebar]);
   atualiza();
 }
 
@@ -802,8 +815,9 @@ async function viewUsuarios(pgIn) {
     h('div', { class: 'note' }, ic('info', 18), 'Usuários e clientes chegam do Serp pelo PC da cliente (somente leitura) sempre que ele está ligado. Aqui você define o papel e a senha de acesso. Se o PC estiver desligado, vale a última sincronização.'), h('div', { style: { marginBottom: '14px' } }, msg),
     h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, ['Usuário', 'Grupo no Serp', 'Papel', 'Senha deste sistema', 'Ativo'].map(t => h('th', { text: t })))),
       h('tbody', {}, us.map(u => h('tr', {}, h('td', {}, h('div', { class: 'cellrow' }, h('div', { class: 'initials', text: iniciais(u.usuario) }), h('span', { class: 'main', text: u.usuario }))), h('td', { text: u.grupo ?? '' }),
-        h('td', {}, h('select', { class: 'sel', onchange: async e => { try { await api('PUT', '/api/usuarios/' + u.cod, { papel: e.target.value }); toast('Papel atualizado'); } catch (x) { toast(x.message, 'erro'); e.target.value = u.papel; } } },
-          [['admin', 'Administrador'], ['escritorio', 'Escritório'], ['producao', 'Produção']].map(([v, t]) => h('option', { value: v, text: t, selected: v === u.papel })))),
+        h('td', {}, h('select', { class: 'sel', onchange: async e => { try { await api('PUT', '/api/usuarios/' + u.cod, { papel: e.target.value }); toast('Papel atualizado'); viewUsuarios(pg); } catch (x) { toast(x.message, 'erro'); e.target.value = u.papel; } } },
+          [['admin', 'Administrador'], ['escritorio', 'Escritório'], ['producao', 'Produção']].map(([v, t]) => h('option', { value: v, text: t, selected: v === u.papel }))),
+          u.papel === 'producao' ? etapasPicker(u) : null),
         h('td', {}, u.senha_web ? h('span', { class: 'tag', text: 'própria' }) : h('span', { class: 'sub', text: u.papel === 'admin' ? 'do Serp (1º acesso)' : 'não definida' }),
           h('button', { class: 'btn sm', style: { marginLeft: '8px' }, text: u.senha_web ? 'Trocar' : 'Definir', onclick: () => definirSenha(u, () => viewUsuarios(pg)) }),
           u.senha_web ? h('button', { class: 'btn sm ghost', text: 'Remover', onclick: async () => { if (await confirmar('Remover a senha própria?', 'O acesso de ' + u.usuario + ' volta a usar a senha do Serp (quando permitido).', 'Remover')) { try { await api('PUT', '/api/usuarios/' + u.cod, { senha_web: '' }); toast('Senha própria removida'); viewUsuarios(pg); } catch (x) { toast(x.message, 'erro'); } } } }) : null),
@@ -813,7 +827,16 @@ async function viewUsuarios(pgIn) {
       seg.recentes.length ? h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, ['Quando', 'Usuário', 'IP', 'Resultado'].map(t => h('th', { text: t })))),
         h('tbody', {}, seg.recentes.slice(0, 20).map(a => h('tr', {}, h('td', { text: new Date(a.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }) }), h('td', { text: a.login || '—' }), h('td', { text: a.ip }),
           h('td', {}, h('span', { class: 'pill ' + (a.ok ? 'st-Entregue' : 'st-Cancelada'), text: { ok: 'Entrou', senha: 'Senha errada', usuario: 'Usuário inexistente', vazia: 'Senha vazia', sem_acesso_web: 'Sem acesso liberado', bloqueado: 'Bloqueado', desafio: 'Verificação falhou', robo: 'Robô barrado' }[a.motivo] || a.motivo }))))))) : h('div', { class: 'sub', text: 'Nenhum acesso registrado ainda.' })) : null,
-    h('p', { class: 'sub', text: 'Administrador: tudo. Escritório: cria e edita OPs. Produção: só preenche Extrusão e Corte e solda e avança a etapa.' })]);
+    h('p', { class: 'sub', text: 'Administrador: tudo. Escritório: cria e edita OPs. Produção: só vê a tela Ordens, apenas das etapas marcadas, e avança ou volta a OP uma etapa por vez.' })]);
+}
+// etapas que um funcionário do papel "Produção" enxerga e move (ex.: só Extrusão)
+function etapasPicker(u) {
+  const marcadas = new Set((u.etapas || '').split(',').filter(Boolean));
+  return h('div', { class: 'etapasel' }, h('small', { class: marcadas.size ? '' : 'warn', text: marcadas.size ? 'Etapas que ele vê:' : 'Marque as etapas deste funcionário:' }),
+    ETAPAS.map(e => h('label', { class: 'ck' }, h('input', { type: 'checkbox', checked: marcadas.has(e.s), onchange: async ev => {
+      const nova = new Set(marcadas); ev.target.checked ? nova.add(e.s) : nova.delete(e.s);
+      try { await api('PUT', '/api/usuarios/' + u.cod, { etapas: [...nova] }); marcadas.clear(); nova.forEach(x => marcadas.add(x)); toast('Etapas atualizadas'); } catch (x) { toast(x.message, 'erro'); ev.target.checked = !ev.target.checked; }
+    } }), e.s)));
 }
 
 // ---------- roteador ----------
@@ -821,6 +844,7 @@ async function rota() {
   if (!ME) return;
   const [path, qs] = (location.hash.slice(1) || '/painel').split('?'); const p = path.split('/').filter(Boolean);
   try {
+    if (ehProd() && p[0] !== 'ordens' && !(p[0] === 'ordem' && /^\d+$/.test(p[1] || ''))) { location.hash = '#/ordens'; return; }
     if (p[0] === 'ordens') return await viewOrdens(qs);
     if (p[0] === 'ordem' && p[1] === 'lote') return await viewLote(qs);
     if (p[0] === 'ordem') return await viewOrdem(p[1], qs);
