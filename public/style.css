@@ -584,7 +584,7 @@ html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
 .etapasel .ck{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;white-space:nowrap}
 
 /* consulta avancada de clientes (modal) */
-.lupa{display:inline-flex;background:none;border:0;padding:0;color:inherit;cursor:pointer;border-radius:6px}.lupa:hover{color:var(--a)}
+.lupa{display:inline-flex;align-items:center;background:none;border:0;padding:0;margin-left:12px;color:var(--mut);cursor:pointer;border-radius:6px}.lupa:hover{color:var(--a)}
 dialog.avdlg{max-width:640px}
 .avanc{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:12px 0}
 .avc{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}
