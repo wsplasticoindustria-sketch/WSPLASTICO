@@ -582,3 +582,11 @@ html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
 .kcard .kact{display:flex;gap:8px;margin-top:10px}.kcard .kact .go{flex:1;width:auto}.kcard .kact .back{flex:none}
 .etapasel{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;max-width:340px}.etapasel small{flex:0 0 100%;color:var(--mut);font-size:12px}.etapasel small.warn{color:var(--err);font-weight:600}
 .etapasel .ck{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;white-space:nowrap}
+
+/* consulta avancada de clientes */
+.lupa { display: inline-flex; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; border-radius: 6px; }
+.lupa.on, .lupa:hover { color: var(--a); }
+.avanc { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; align-items: end; margin: 0 0 16px; padding: 14px; border: 1px solid var(--bd); border-radius: 10px; }
+.avanc[hidden] { display: none; }
+.avc { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.avc input, .avc select { padding: 8px 10px; border: 1px solid var(--bd2); border-radius: 8px; font: inherit; background: transparent; color: inherit; }

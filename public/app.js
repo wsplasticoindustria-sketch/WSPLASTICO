@@ -659,10 +659,10 @@ function dialogoFichas(lista, titulo) {   // pergunta 1 ou 2 por folha e imprime
 // ---------- clientes ----------
 async function viewClientes(qs) {
   const par = new URLSearchParams(qs); let q = par.get('q') || '', so = par.get('comOrdens') !== '0';
-  const box = h('div'), pagEl = h('div'), pg = { pagina: 0, limite: tamanhoSalvo() };
+  const box = h('div'), pagEl = h('div'), pg = { pagina: 0, limite: tamanhoSalvo() }, av = {};   // av: filtros da consulta avancada
   const filtra = () => { pg.pagina = 0; carrega(); };
   const carrega = async () => {
-    const res = await api('GET', `/api/clientes?limite=${pg.limite}&pagina=${pg.pagina}&comOrdens=${so ? 1 : 0}&q=${encodeURIComponent(q)}`); const r = res.linhas;
+    const res = await api('GET', `/api/clientes?limite=${pg.limite}&pagina=${pg.pagina}&comOrdens=${so ? 1 : 0}&q=${encodeURIComponent(q)}` + Object.entries(av).filter(([, v]) => v).map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join('')); const r = res.linhas;
     pagEl.replaceChildren(pager(pg, res.total, () => { carrega(); window.scrollTo({ top: 0 }); }));
     box.replaceChildren(!r.length ? h('div', { class: 'tw' }, vazio(so ? 'Nenhum cliente com ordens ainda' : 'Nenhum cliente encontrado', so ? 'Desmarque "Só com ordens" para ver todos os clientes do Serp.' : 'Tente outro nome.')) :
       h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Cliente' }), h('th', { text: 'Cidade' }), h('th', { class: 'n', text: 'OPs' }), h('th', { class: 'n', text: 'Andamento' }), h('th', { class: 'n', text: 'Prontas' }), h('th', { class: 'n', text: 'Entregues' }), h('th', { class: 'n', text: 'Kg pedido' }), h('th', { text: 'Produzido' }))),
@@ -672,8 +672,13 @@ async function viewClientes(qs) {
             h('td', {}, c.kg_pedido ? h('div', { class: 'mini' }, h('i', { style: { width: pct + '%' } })) : '—')); })))));
   };
   const chk = h('input', { type: 'checkbox', checked: so, onchange: e => { so = e.target.checked; filtra(); } });
+  const campo = (k, rot, ph, extra) => h('label', { class: 'avc' }, h('span', { text: rot }), h('input', { placeholder: ph || '', maxlength: extra && extra.max, oninput: debounce(e => { av[k] = e.target.value.trim(); filtra(); }) }));
+  const sit = h('select', { onchange: e => { av.situacao = e.target.value; filtra(); } }, [['', 'Qualquer'], ['andamento', 'Com OP em andamento'], ['pronta', 'Com OP pronta'], ['entregue', 'Com OP entregue'], ['sem', 'Sem nenhuma OP']].map(([v, t]) => h('option', { value: v, text: t })));
+  const painel = h('div', { class: 'avanc', hidden: true }, campo('nome', 'Nome / razão social'), campo('cod', 'Código', 'ex.: 1020'), campo('doc', 'CPF / CNPJ', 'só números'), campo('tel', 'Telefone', 'qualquer parte'), campo('cidade', 'Cidade'), campo('uf', 'UF', 'SP', { max: 2 }), h('label', { class: 'avc' }, h('span', { text: 'Situação das OPs' }), sit),
+    h('button', { class: 'btn', onclick: () => { for (const k of Object.keys(av)) delete av[k]; painel.querySelectorAll('input').forEach(i => (i.value = '')); sit.value = ''; filtra(); } }, 'Limpar filtros'));
+  const lupa = h('button', { class: 'lupa', type: 'button', title: 'Consulta avançada', 'aria-label': 'Consulta avançada', onclick: () => { painel.hidden = !painel.hidden; lupa.classList.toggle('on', !painel.hidden); } }, ic('search', 18));
   shell('clientes', [pageHead('Clientes', 'Lista do Serp, somente para consulta. Clique para ver os pedidos.'),
-    h('div', { class: 'tools' }, h('div', { class: 'inp search' }, ic('search', 18), h('input', { placeholder: 'Buscar cliente…', value: q, oninput: debounce(e => { q = e.target.value; filtra(); }) })), h('label', { class: 'sub', style: { display: 'flex', gap: '8px', alignItems: 'center' } }, chk, 'Só com ordens')), box, pagEl]);
+    h('div', { class: 'tools' }, h('div', { class: 'inp search' }, lupa, h('input', { placeholder: 'Buscar cliente…', value: q, oninput: debounce(e => { q = e.target.value; filtra(); }) })), h('label', { class: 'sub', style: { display: 'flex', gap: '8px', alignItems: 'center' } }, chk, 'Só com ordens')), painel, box, pagEl]);
   await carrega();
 }
 async function viewCliente(cod, pg) {
