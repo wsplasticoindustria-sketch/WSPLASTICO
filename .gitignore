@@ -1,0 +1,70 @@
+# ===== NUNCA subir para o Git =====
+
+# --- segredos e configuracao do ambiente ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+secrets/
+segredos/
+credenciais*
+*senha*.txt
+*token*.txt
+
+# --- credenciais do Serp / Firebird (o .ini do Serp tem usuario e senha do banco) ---
+*.ini
+configuracaoFiredac*
+*.fdb
+*.gdb
+*.fbk
+*.gbk
+
+# --- agente (PC do cliente): config com o token, estado e logs ---
+agente/config.json
+agente/estado.json
+agente/*.log
+agente/*.log.*
+agente/node_modules/
+
+# --- bancos e dados locais ---
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.pglite
+backups/
+
+# --- dependencias, builds e logs ---
+node_modules/
+*.log
+npm-debug.log*
+.vercel/
+.next/
+dist/
+
+# --- arquivos gerados / pessoais ---
+*.zip
+*.pdf
+exemplos_relatorios/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak
+.vscode/
+.idea/
+.claude/
+
+# --- so o necessario para a Vercel fica no Git (api, lib, public, package*.json, vercel.json) ---
+agente/
+scripts/
+sql/
+local.js
+*.md
+.vercelignore

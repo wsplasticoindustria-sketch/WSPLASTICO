@@ -1,0 +1,11 @@
+{
+  "name": "ordem-producao-nuvem",
+  "version": "1.0.0",
+  "description": "Ordem de producao (nuvem) - Vercel + Supabase; clientes/usuarios chegam do Serp por um agente no PC da cliente (somente leitura)",
+  "private": true,
+  "main": "local.js",
+  "engines": { "node": ">=20" },
+  "scripts": { "start": "node local.js", "dev-demo": "node local.js --demo", "teste": "node scripts/testar.js" },
+  "dependencies": { "pg": "^8.13.0" },
+  "devDependencies": { "@electric-sql/pglite": "^0.2.17" }
+}
