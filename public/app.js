@@ -410,6 +410,12 @@ function clienteAuto(E, desab, onPick) {
   inp.addEventListener('input', busca); inp.addEventListener('blur', () => setTimeout(() => (lst.hidden = true), 150)); mostra();
   return h('div', { class: 'ac' }, h('label', { class: 'field' }, h('span', { class: 'l', text: 'Cliente' }), h('div', { class: 'inp' + (desab ? ' dis' : '') }, desab ? ic('building', 18) : lupaClientes(c => { E.cliente_cod = c.cod; E.cliente_nome = c.nome; inp.value = c.nome; mostra(); if (onPick) onPick(); }), inp)), lst, link);
 }
+function campoCor(E, desab) {   // lista fixa de cores; se a OP antiga tem outra cor, ela continua aparecendo
+  const extra = E.cor && !LISTA_CORES.some(c => c.toLowerCase() === String(E.cor).toLowerCase()) ? [E.cor] : [];
+  const atual = LISTA_CORES.find(c => c.toLowerCase() === String(E.cor || '').toLowerCase()) || E.cor || '';
+  return h('label', { class: 'field' }, h('span', { class: 'l', text: 'Cor' }), h('div', { class: 'inp' + (desab ? ' dis' : '') },
+    h('select', { disabled: desab, onchange: e => { E.cor = e.target.value || null; } }, h('option', { value: '', text: '—' }), [...LISTA_CORES, ...extra].map(c => h('option', { value: c, text: c, selected: c === atual })))));
+}
 function tilesLitros(E, desab) {
   const el = h('div', { class: 'tiles' }); const pinta = () => el.replaceChildren(...CFG.litros.map(l => h('button', { type: 'button', disabled: desab, class: 'tile' + (E.litros === l ? ' on' : ''), onclick: () => { E.litros = E.litros === l ? null : l; pinta(); } }, h('big', { text: l }), h('small', { text: 'litros' }))));
   pinta(); return h('div', { class: 'opt' }, h('b', { text: 'Saco p/ lixo — capacidade' }), el);
@@ -488,7 +494,7 @@ async function viewOrdem(id, qs) {
           h('label', { class: 'field' }, h('span', { class: 'l', text: 'Data' }), h('div', { class: 'inp' + (dEsc ? ' dis' : '') }, h('input', { type: 'date', value: E.data, disabled: dEsc, onchange: e => (E.data = e.target.value) }))), clienteAuto(E, dEsc))),
       h('div', { class: 'card' }, h('h3', {}, h('span', { class: 'ico' }, ic('bag', 17)), 'Produto'), tilesLitros(E, dEsc), segmento('Reforço', CFG.reforcos, E, 'reforco', dEsc), tilesFormato(E, dEsc)),
       h('div', { class: 'card' }, h('h3', {}, h('span', { class: 'ico' }, ic('weight', 17)), 'Medidas e quantidade'),
-        h('div', { class: 'row' }, campo('Largura', 'largura', { dec: 1, suf: 'cm' }), campo('Comprimento', 'comprimento', { dec: 1, suf: 'cm' }), campo('Espessura', 'espessura', { dec: 1 }), campo('Gramatura', 'gramatura', { dec: 1 }), campo('Cor', 'cor'),
+        h('div', { class: 'row' }, campo('Largura', 'largura', { dec: 1, suf: 'cm' }), campo('Comprimento', 'comprimento', { dec: 1, suf: 'cm' }), campo('Espessura', 'espessura', { dec: 1 }), campo('Gramatura', 'gramatura', { dec: 1 }), campoCor(E, dEsc),
           campo('Qnt de pacote', 'qtd_pacote', { int: 1, suf: 'pct' }), campo('Qnt de Kg', 'qtd_kg', { dec: 1, suf: 'kg' })),
         h('label', { class: 'field', style: { marginTop: '14px' } }, h('span', { class: 'l', text: 'Obs.' }), h('textarea', { class: 'ta', disabled: dEsc, oninput: e => (E.obs = e.target.value) }, E.obs || ''))),
       h('div', { class: 'card pcard' }, h('h3', {}, h('span', { class: 'ico' }, ic('layers', 17)), 'Extrusão'), h('div', { class: 'row' }, campo('Qnt de bobina', 'ext_bobinas', { int: 1, dis: dExt }), campo('Kg total', 'ext_kg', { dec: 1, suf: 'kg', dis: dExt }), campo('Extrusor', 'ext_extrusor', { dis: dExt }))),
@@ -497,7 +503,8 @@ async function viewOrdem(id, qs) {
 }
 
 // ---------- resumo de producao ----------
-const CORES = { preto: '#1f2933', azul: '#2563eb', verde: '#16a34a', vermelho: '#dc2626', amarelo: '#eab308', branco: '#f8fafc', transparente: '#cbd5e1', cinza: '#94a3b8', laranja: '#f97316', rosa: '#ec4899', roxo: '#7c3aed', marrom: '#92400e' };
+const LISTA_CORES = ['Marrom', 'Amarelo', 'Azul', 'Verde', 'Preto', 'Vermelho', 'Leitoso', 'Branco', 'Laranja'];
+const CORES = { leitoso: '#efe8d6', preto: '#1f2933', azul: '#2563eb', verde: '#16a34a', vermelho: '#dc2626', amarelo: '#eab308', branco: '#f8fafc', transparente: '#cbd5e1', cinza: '#94a3b8', laranja: '#f97316', rosa: '#ec4899', roxo: '#7c3aed', marrom: '#92400e' };
 const cap = t => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 const isoLocal = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
 function periodoRapido(tipo) {
@@ -788,7 +795,7 @@ async function viewLote(qs) {
         h('button', { type: 'button', class: 'btn sm', onclick: () => { itens.splice(i + 1, 0, { ...it }); pinta(); } }, ic('copy', 15), 'Duplicar'),
         itens.length > 1 ? h('button', { type: 'button', class: 'btn sm ghost danger', onclick: () => { itens.splice(i, 1); pinta(); } }, 'Remover') : null)),
       h('div', { class: 'row lrow' }, escolha('Litros', it, 'litros', CFG.litros, n => n + ' L'), escolha('Reforço', it, 'reforco', CFG.reforcos), escolha('Formato', it, 'formato', CFG.formatos)),
-      h('div', { class: 'row lrow' }, campo('Largura', it, 'largura', { dec: 1, suf: 'cm' }), campo('Comprimento', it, 'comprimento', { dec: 1, suf: 'cm' }), campo('Espessura', it, 'espessura', { dec: 1 }), campo('Gramatura', it, 'gramatura', { dec: 1 }), campo('Cor', it, 'cor')),
+      h('div', { class: 'row lrow' }, campo('Largura', it, 'largura', { dec: 1, suf: 'cm' }), campo('Comprimento', it, 'comprimento', { dec: 1, suf: 'cm' }), campo('Espessura', it, 'espessura', { dec: 1 }), campo('Gramatura', it, 'gramatura', { dec: 1 }), campoCor(it, false)),
       h('div', { class: 'row lrow' }, campo('Qnt de pacote', it, 'qtd_pacote', { int: 1, suf: 'pct' }), campo('Qnt de Kg', it, 'qtd_kg', { dec: 1, suf: 'kg' }), campo('Obs.', it, 'obs')))));
     soma();
   }
