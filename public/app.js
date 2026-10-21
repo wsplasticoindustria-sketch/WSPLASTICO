@@ -373,6 +373,28 @@ async function viewOrdens(qs) {
   await carrega();
 }
 
+// ---------- consulta avancada de clientes (modal) ----------
+function lupaClientes(onPick) {
+  return h('button', { class: 'lupa', type: 'button', title: 'Consulta avançada', 'aria-label': 'Consulta avançada de clientes', onclick: () => consultaClientes(onPick) }, ic('search', 18));
+}
+function consultaClientes(onPick) {
+  const f = {}, res = h('div', { class: 'avres' }), info = h('div', { class: 'sub' });
+  const busca = debounce(async () => {
+    const qs = Object.entries(f).filter(([, v]) => v).map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join('');
+    if (!qs) { res.replaceChildren(h('div', { class: 'sub', text: 'Preencha um ou mais filtros para consultar.' })); info.textContent = ''; return; }
+    const r = await api('GET', '/api/clientes?limite=50&comOrdens=0' + qs);
+    info.textContent = r.total > 50 ? `Mostrando 50 de ${num(r.total)} — refine os filtros.` : num(r.total) + (r.total === 1 ? ' cliente' : ' clientes');
+    res.replaceChildren(...(r.linhas.length ? r.linhas.map(c => h('button', { type: 'button', class: 'avrow', onclick: () => { d.close(); onPick(c); } }, h('b', { text: c.nome }), h('small', { text: ['cód. ' + c.cod, c.cidade ? c.cidade + '/' + (c.uf || '') : '', c.doc, c.telefone].filter(Boolean).join(' · ') }))) : [h('div', { class: 'sub', text: 'Nenhum cliente encontrado.' })]));
+  }, 250);
+  const campo = (k, rot, ph, max) => h('label', { class: 'avc' }, h('span', { text: rot }), h('input', { placeholder: ph || '', maxlength: max, autocomplete: 'off', oninput: e => { f[k] = e.target.value.trim(); busca(); } }));
+  const sit = h('select', { onchange: e => { f.situacao = e.target.value; busca(); } }, [['', 'Qualquer'], ['andamento', 'Com OP em andamento'], ['pronta', 'Com OP pronta'], ['entregue', 'Com OP entregue'], ['sem', 'Sem nenhuma OP']].map(([v, t]) => h('option', { value: v, text: t })));
+  const d = h('dialog', { class: 'avdlg' }, h('h3', { text: 'Consulta avançada de clientes' }),
+    h('div', { class: 'avanc' }, campo('nome', 'Nome / razão social'), campo('cod', 'Código'), campo('doc', 'CPF / CNPJ', 'só números'), campo('tel', 'Telefone'), campo('cidade', 'Cidade'), campo('uf', 'UF', 'SP', 2), h('label', { class: 'avc' }, h('span', { text: 'Situação das OPs' }), sit)),
+    info, res, h('div', { class: 'acts', style: { marginTop: '14px' } }, h('button', { class: 'btn', text: 'Fechar', onclick: () => d.close() })));
+  d.addEventListener('close', () => d.remove()); document.body.append(d); d.showModal(); busca();
+  d.querySelector('input').focus();
+}
+
 // ---------- ficha (formulario) ----------
 function clienteAuto(E, desab, onPick) {
   const inp = h('input', { placeholder: 'Digite para buscar no Serp…', value: E.cliente_nome || '', disabled: desab, autocomplete: 'off' });
@@ -386,7 +408,7 @@ function clienteAuto(E, desab, onPick) {
     lst.hidden = !r.length;
   }, 200);
   inp.addEventListener('input', busca); inp.addEventListener('blur', () => setTimeout(() => (lst.hidden = true), 150)); mostra();
-  return h('div', { class: 'ac' }, h('label', { class: 'field' }, h('span', { class: 'l', text: 'Cliente' }), h('div', { class: 'inp' + (desab ? ' dis' : '') }, ic('building', 18), inp)), lst, link);
+  return h('div', { class: 'ac' }, h('label', { class: 'field' }, h('span', { class: 'l', text: 'Cliente' }), h('div', { class: 'inp' + (desab ? ' dis' : '') }, desab ? ic('building', 18) : lupaClientes(c => { E.cliente_cod = c.cod; E.cliente_nome = c.nome; inp.value = c.nome; mostra(); if (onPick) onPick(); }), inp)), lst, link);
 }
 function tilesLitros(E, desab) {
   const el = h('div', { class: 'tiles' }); const pinta = () => el.replaceChildren(...CFG.litros.map(l => h('button', { type: 'button', disabled: desab, class: 'tile' + (E.litros === l ? ' on' : ''), onclick: () => { E.litros = E.litros === l ? null : l; pinta(); } }, h('big', { text: l }), h('small', { text: 'litros' }))));
@@ -659,10 +681,10 @@ function dialogoFichas(lista, titulo) {   // pergunta 1 ou 2 por folha e imprime
 // ---------- clientes ----------
 async function viewClientes(qs) {
   const par = new URLSearchParams(qs); let q = par.get('q') || '', so = par.get('comOrdens') !== '0';
-  const box = h('div'), pagEl = h('div'), pg = { pagina: 0, limite: tamanhoSalvo() }, av = {};   // av: filtros da consulta avancada
+  const box = h('div'), pagEl = h('div'), pg = { pagina: 0, limite: tamanhoSalvo() };
   const filtra = () => { pg.pagina = 0; carrega(); };
   const carrega = async () => {
-    const res = await api('GET', `/api/clientes?limite=${pg.limite}&pagina=${pg.pagina}&comOrdens=${so ? 1 : 0}&q=${encodeURIComponent(q)}` + Object.entries(av).filter(([, v]) => v).map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join('')); const r = res.linhas;
+    const res = await api('GET', `/api/clientes?limite=${pg.limite}&pagina=${pg.pagina}&comOrdens=${so ? 1 : 0}&q=${encodeURIComponent(q)}`); const r = res.linhas;
     pagEl.replaceChildren(pager(pg, res.total, () => { carrega(); window.scrollTo({ top: 0 }); }));
     box.replaceChildren(!r.length ? h('div', { class: 'tw' }, vazio(so ? 'Nenhum cliente com ordens ainda' : 'Nenhum cliente encontrado', so ? 'Desmarque "Só com ordens" para ver todos os clientes do Serp.' : 'Tente outro nome.')) :
       h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Cliente' }), h('th', { text: 'Cidade' }), h('th', { class: 'n', text: 'OPs' }), h('th', { class: 'n', text: 'Andamento' }), h('th', { class: 'n', text: 'Prontas' }), h('th', { class: 'n', text: 'Entregues' }), h('th', { class: 'n', text: 'Kg pedido' }), h('th', { text: 'Produzido' }))),
@@ -672,13 +694,8 @@ async function viewClientes(qs) {
             h('td', {}, c.kg_pedido ? h('div', { class: 'mini' }, h('i', { style: { width: pct + '%' } })) : '—')); })))));
   };
   const chk = h('input', { type: 'checkbox', checked: so, onchange: e => { so = e.target.checked; filtra(); } });
-  const campo = (k, rot, ph, extra) => h('label', { class: 'avc' }, h('span', { text: rot }), h('input', { placeholder: ph || '', maxlength: extra && extra.max, oninput: debounce(e => { av[k] = e.target.value.trim(); filtra(); }) }));
-  const sit = h('select', { onchange: e => { av.situacao = e.target.value; filtra(); } }, [['', 'Qualquer'], ['andamento', 'Com OP em andamento'], ['pronta', 'Com OP pronta'], ['entregue', 'Com OP entregue'], ['sem', 'Sem nenhuma OP']].map(([v, t]) => h('option', { value: v, text: t })));
-  const painel = h('div', { class: 'avanc', hidden: true }, campo('nome', 'Nome / razão social'), campo('cod', 'Código', 'ex.: 1020'), campo('doc', 'CPF / CNPJ', 'só números'), campo('tel', 'Telefone', 'qualquer parte'), campo('cidade', 'Cidade'), campo('uf', 'UF', 'SP', { max: 2 }), h('label', { class: 'avc' }, h('span', { text: 'Situação das OPs' }), sit),
-    h('button', { class: 'btn', onclick: () => { for (const k of Object.keys(av)) delete av[k]; painel.querySelectorAll('input').forEach(i => (i.value = '')); sit.value = ''; filtra(); } }, 'Limpar filtros'));
-  const lupa = h('button', { class: 'lupa', type: 'button', title: 'Consulta avançada', 'aria-label': 'Consulta avançada', onclick: () => { painel.hidden = !painel.hidden; lupa.classList.toggle('on', !painel.hidden); } }, ic('search', 18));
   shell('clientes', [pageHead('Clientes', 'Lista do Serp, somente para consulta. Clique para ver os pedidos.'),
-    h('div', { class: 'tools' }, h('div', { class: 'inp search' }, lupa, h('input', { placeholder: 'Buscar cliente…', value: q, oninput: debounce(e => { q = e.target.value; filtra(); }) })), h('label', { class: 'sub', style: { display: 'flex', gap: '8px', alignItems: 'center' } }, chk, 'Só com ordens')), painel, box, pagEl]);
+    h('div', { class: 'tools' }, h('div', { class: 'inp search' }, lupaClientes(c => (location.hash = '#/cliente/' + c.cod)), h('input', { placeholder: 'Buscar cliente…', value: q, oninput: debounce(e => { q = e.target.value; filtra(); }) })), h('label', { class: 'sub', style: { display: 'flex', gap: '8px', alignItems: 'center' } }, chk, 'Só com ordens')), box, pagEl]);
   await carrega();
 }
 async function viewCliente(cod, pg) {
