@@ -50,6 +50,7 @@ const IC = {
   bag: '<path d="M6 8h12l1 12H5z"/><path d="M9 8V6a3 3 0 016 0v2"/>', roll: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.500"/>', sheet: '<path d="M4 6h16v12H4z"/><path d="M4 10h16"/>',
   weight: '<path d="M5 8h14l1.500 11h-17z"/><path d="M9 8a3 3 0 016 0"/>', layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>', alert: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',
   chart: '<path d="M4 20h16"/><path d="M7 16v-5M12 16V6M17 16v-8"/>',
+  tag: '<path d="M3 12V4a1 1 0 011-1h8l9 9-9 9z"/><circle cx="8" cy="8" r="1.600"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/>',
   chat: '<path d="M21 12a8 8 0 01-11.800 7L4 20l1.100-4.600A8 8 0 1121 12z"/><path d="M9 10h6M9 13.500h4"/>',
@@ -69,8 +70,9 @@ const PROX = Object.fromEntries(ETAPAS.slice(0, 4).map((e, i) => [e.s, ETAPAS[i 
 const ANT = Object.fromEntries(ETAPAS.slice(1).map((e, i) => [e.s, ETAPAS[i].s]));
 // papel "producao": so enxerga as etapas que o administrador liberou e anda uma etapa para frente ou para tras
 const ehProd = () => ME.papel === 'producao';
+const podeEditar = () => ME.papel !== 'producao' && ME.papel !== 'vendedor';   // vendedor: so consulta OPs, clientes e precos
 const etapasVisiveis = () => ehProd() ? ETAPAS.filter(e => ME.etapas.includes(e.s)) : ETAPAS;
-const podeAvancar = o => !!PROX[o.status] && (!ehProd() || PROX[o.status] !== 'Entregue' || ME.etapas.includes('Entregue'));
+const podeAvancar = o => ME.papel !== 'vendedor' && !!PROX[o.status] && (!ehProd() || PROX[o.status] !== 'Entregue' || ME.etapas.includes('Entregue'));
 const pill = s => h('span', { class: 'pill st-' + slug(s), text: s });
 
 // ---------- tema / toast / dialogo ----------
@@ -178,9 +180,9 @@ function renderLogin(msg) {
 
 // ---------- shell ----------
 function shell(ativo, conteudo) {
-  const links = ehProd() ? [['ordens', 'Ordens', 'board']] : [['painel', 'Painel', 'home'], ['ordens', 'Ordens', 'board'], ['clientes', 'Clientes', 'building'], ['relatorio', 'Relatório', 'chart']];
+  const links = ehProd() ? [['ordens', 'Ordens', 'board']] : [['painel', 'Painel', 'home'], ['ordens', 'Ordens', 'board'], ['clientes', 'Clientes', 'building'], ['precos', 'Preços', 'tag'], ['relatorio', 'Relatório', 'chart']];
   if (ME.papel === 'admin') links.push(['usuarios', 'Usuários', 'users']);
-  const papel = { admin: 'Administrador', escritorio: 'Escritório', producao: 'Produção' }[ME.papel];
+  const papel = { admin: 'Administrador', escritorio: 'Escritório', vendedor: 'Vendedor', producao: 'Produção' }[ME.papel];
   const cnt = h('span', { class: 'cnt', hidden: true }), syncTxt = h('div', {}, 'Verificando…'), syncDot = h('span', { class: 'dot off' });
   const sair = async () => { await api('POST', '/api/logout', {}); ME = null; renderLogin(); };
   const botTema = h('button', { title: 'Tema claro/escuro', onclick: alternaTema }, ic('moon', 18)), botSair = h('button', { title: 'Sair', onclick: sair }, ic('logout', 18));
@@ -235,7 +237,7 @@ async function viewPainel() {
       h('div', { class: 'sub', text: `OP ${o.numero} · ${produtoTxt(o)}` })), h('div', { style: { textAlign: 'right' } }, pill(o.status), h('div', { class: 'sub', text: rot })));
   shell('painel', [
     pageHead(`${saud}, ${ME.usuario.toLowerCase()}`, new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }),
-      ME.papel !== 'producao' ? h('a', { class: 'btn pri', href: '#/ordem/novo' }, ic('plus', 18), 'Nova OP') : null), pipe,
+      podeEditar() ? h('a', { class: 'btn pri', href: '#/ordem/novo' }, ic('plus', 18), 'Nova OP') : null), pipe,
     h('div', { class: 'grid cols2' },
       h('div', {}, h('div', { class: 'card' }, h('h3', {}, h('span', { class: 'ico' }, ic('weight', 17)), 'Produção do mês'),
         h('div', { class: 'cols4s' },
@@ -281,11 +283,11 @@ function cartao(o, recarrega) {
   const pct = o.qtd_kg ? Math.min(100, Math.round(((o.corte_kg || 0) / o.qtd_kg) * 100)) : 0, prox = PROX[o.status];
   const pode = podeAvancar(o), ant = ehProd() ? ANT[o.status] : null;
   const mover = novo => async e => { e.stopPropagation(); try { await api('PUT', '/api/ordens/' + o.id, { status: novo }); toast(`OP ${o.numero}: ${novo}`); recarrega(); } catch (x) { toast(x.message, 'erro'); } };
-  return h('div', { class: 'kcard st-' + slug(o.status), draggable: !TOQUE, onclick: () => (location.hash = '#/ordem/' + o.id),
+  return h('div', { class: 'kcard st-' + slug(o.status), draggable: !TOQUE && ME.papel !== 'vendedor', onclick: () => (location.hash = '#/ordem/' + o.id),
     ondragstart: e => { e.dataTransfer.setData('text/plain', o.id + '|' + o.status); e.dataTransfer.effectAllowed = 'move'; e.currentTarget.classList.add('dragging'); },
     ondragend: e => e.currentTarget.classList.remove('dragging') },
     h('div', { class: 'top' }, h('span', { class: 'opn', text: 'OP ' + o.numero }), h('span', { class: 'topd' }, h('span', { class: 'sub', text: diasTxt(dias(o.data)) }),
-      ME.papel !== 'producao' ? h('a', { class: 'dup', href: '#/ordem/lote?copiar=' + o.id, title: 'Duplicar esta OP', 'aria-label': 'Duplicar a OP ' + o.numero, draggable: false, onclick: e => e.stopPropagation() }, ic('copy', 15)) : null)), h('div', { class: 'cli', text: o.cliente_nome }),
+      podeEditar() ? h('a', { class: 'dup', href: '#/ordem/lote?copiar=' + o.id, title: 'Duplicar esta OP', 'aria-label': 'Duplicar a OP ' + o.numero, draggable: false, onclick: e => e.stopPropagation() }, ic('copy', 15)) : null)), h('div', { class: 'cli', text: o.cliente_nome }),
     h('div', { class: 'tags' }, [o.litros ? o.litros + ' L' : null, o.reforco, o.formato].filter(Boolean).map(t => h('span', { class: 'tag', text: t })), o.grupo_n > 1 ? h('span', { class: 'tag grp' }, ic('link', 11), 'grupo ' + o.grupo_n) : null),
     h('div', { class: 'meta' }, h('span', { text: [medidas(o), o.cor].filter(Boolean).join(' · ') }), h('span', { class: 'num', text: o.qtd_kg != null ? kg(o.qtd_kg) + ' kg' : '' })),
     o.qtd_kg ? h('div', { class: 'mini' }, h('i', { style: { width: pct + '%' } })) : null,
@@ -346,8 +348,8 @@ async function viewOrdens(qs) {
     if (modo === 'lista') { p.set('limite', pg.limite); p.set('pagina', pg.pagina); } else p.set('limite', '1000');
     const r = await api('GET', '/api/ordens?' + p);
     tot.replaceChildren(h('span', {}, h('b', { text: num(r.total) }), ' ordens'), h('span', {}, h('b', { text: kg(r.kgPedido) }), ' kg pedidos'), h('span', {}, h('b', { text: kg(r.kgProduzido) }), ' kg produzidos'),
-      ...(modo === 'lista' && ME.papel !== 'producao' && r.linhas.length ? [h('button', { class: 'btn sm ghost', onclick: () => { r.linhas.forEach(o => SEL.add(o.id)); atualizaSel(); carrega(); } }, 'Selecionar esta página')] : []));
-    if (modo === 'lista') { box.replaceChildren(tabelaOrdens(r.linhas, { selecionavel: ME.papel !== 'producao', onSel: atualizaSel })); pagEl.replaceChildren(pager(pg, r.total, carrega)); }
+      ...(modo === 'lista' && podeEditar() && r.linhas.length ? [h('button', { class: 'btn sm ghost', onclick: () => { r.linhas.forEach(o => SEL.add(o.id)); atualizaSel(); carrega(); } }, 'Selecionar esta página')] : []));
+    if (modo === 'lista') { box.replaceChildren(tabelaOrdens(r.linhas, { selecionavel: podeEditar(), onSel: atualizaSel })); pagEl.replaceChildren(pager(pg, r.total, carrega)); }
     else { pagEl.replaceChildren(); box.replaceChildren(quadro(r.linhas, carrega)); }
   }
   const pintaChips = () => chipsEl.replaceChildren(...CFG.status.filter(s => !ehProd() || ME.etapas.includes(s)).map(s => h('button', { class: 'chip st-' + slug(s) + (st.has(s) ? ' on' : ''), onclick: () => { st.has(s) ? st.delete(s) : st.add(s); pintaChips(); filtra(); } }, s, h('span', { class: 'cn', text: porSt[s] || 0 }))));
@@ -366,7 +368,7 @@ async function viewOrdens(qs) {
   const de = h('input', { type: 'date', value: f.de, onchange: e => { f.de = e.target.value; filtra(); } }), ate = h('input', { type: 'date', value: f.ate, onchange: e => { f.ate = e.target.value; filtra(); } });
   chipsEl.hidden = modo !== 'lista'; limEl.hidden = modo !== 'quadro';
   const dicaEl = h('div', { class: 'sub', style: { margin: '-4px 2px 12px' }, hidden: modo !== 'quadro', text: TOQUE ? 'Escolha a etapa acima. Toque no botão do cartão para avançar a OP.' : 'Arraste um cartão para outra coluna para mudar a etapa da OP.' });
-  shell('ordens', [pageHead('Ordens de produção', ehProd() ? (ME.etapas.length ? 'Suas etapas: ' + ME.etapas.join(', ') + '.' : 'Nenhuma etapa liberada para você. Fale com o administrador.') : 'Acompanhe cada pedido da extrusão à entrega.', [ehProd() ? null : csvBtn, ME.papel !== 'producao' ? h('a', { class: 'btn', href: '#/ordem/lote' }, ic('copy', 17), 'Lançar várias') : null, ME.papel !== 'producao' ? h('a', { class: 'btn pri', href: '#/ordem/novo' }, ic('plus', 18), 'Nova OP') : null]),
+  shell('ordens', [pageHead('Ordens de produção', ehProd() ? (ME.etapas.length ? 'Suas etapas: ' + ME.etapas.join(', ') + '.' : 'Nenhuma etapa liberada para você. Fale com o administrador.') : 'Acompanhe cada pedido da extrusão à entrega.', [ehProd() ? null : csvBtn, podeEditar() ? h('a', { class: 'btn', href: '#/ordem/lote' }, ic('copy', 17), 'Lançar várias') : null, podeEditar() ? h('a', { class: 'btn pri', href: '#/ordem/novo' }, ic('plus', 18), 'Nova OP') : null]),
     h('div', { class: 'tools' }, seg, limEl, h('div', { class: 'inp search' }, ic('search', 18), busca), h('div', { class: 'inp' }, de), h('span', { class: 'sub', text: 'até' }), h('div', { class: 'inp' }, ate)),
     f.grupo ? h('div', { class: 'note' }, ic('link', 18), 'Mostrando só o grupo ' + f.grupo + '. ', h('a', { href: '#/ordens' }, 'Ver todas as OPs')) : null,
     chipsEl, dicaEl, tot, box, pagEl, barSel]);
@@ -435,7 +437,7 @@ async function viewOrdem(id, qs) {
   const o = nova ? { data: hoje(), produto: 'Saco p/ lixo', status: 'Aberta', historico: [] } : await api('GET', '/api/ordens/' + id);
   if (nova && qs) { const c = new URLSearchParams(qs).get('cliente'); if (c) { try { const r = await api('GET', '/api/clientes/' + c); o.cliente_cod = r.cliente.cod; o.cliente_nome = r.cliente.nome; } catch { /* segue sem vincular */ } } }
   const irmas = !nova && o.grupo_n > 1 ? (await api('GET', '/api/ordens?grupo=' + o.grupo + '&limite=100')).linhas.reverse() : [];
-  const prod = ehProd(), bloq = o.status === 'Cancelada' && ME.papel !== 'admin', dEsc = prod || bloq;
+  const prod = ehProd(), leitura = ME.papel === 'vendedor', bloq = leitura || (o.status === 'Cancelada' && ME.papel !== 'admin'), dEsc = prod || bloq;
   const dExt = bloq || (prod && o.status !== 'Em extrusão'), dCor = bloq || (prod && o.status !== 'Em corte e solda');   // producao preenche so a etapa em que a OP esta
   const E = { ...o };
   const campo = (rot, k, op = {}) => {
@@ -462,13 +464,13 @@ async function viewOrdem(id, qs) {
       h('span', { text: [x.litros ? x.litros + ' L' : '', x.qtd_pacote != null ? x.qtd_pacote + ' pct' : ''].filter(Boolean).join(' · ') || x.produto }), pill(x.status)))),
     h('div', { class: 'acts', style: { justifyContent: 'flex-start', flexWrap: 'wrap', marginTop: '14px', flexDirection: 'row' } },
       h('button', { class: 'btn sm', onclick: () => dialogoFichas(irmas, 'Imprimir fichas do grupo ' + o.grupo) }, ic('print', 15), 'Imprimir fichas do grupo'),
-      prod ? null : h('button', { class: 'btn sm ghost', onclick: async () => { if (await confirmar('Tirar esta OP do grupo?', 'Ela continua existindo; só deixa de ficar junto das outras.', 'Tirar do grupo')) { try { await api('POST', '/api/ordens/desagrupar', { id: o.id }); toast('OP fora do grupo'); viewOrdem(id); } catch (e) { toast(e.message, 'erro'); } } } }, 'Tirar do grupo'))) : null;
+      !podeEditar() ? null : h('button', { class: 'btn sm ghost', onclick: async () => { if (await confirmar('Tirar esta OP do grupo?', 'Ela continua existindo; só deixa de ficar junto das outras.', 'Tirar do grupo')) { try { await api('POST', '/api/ordens/desagrupar', { id: o.id }); toast('OP fora do grupo'); viewOrdem(id); } catch (e) { toast(e.message, 'erro'); } } } }, 'Tirar do grupo'))) : null;
   const idx = ETAPAS.findIndex(e => e.s === o.status), cancelada = o.status === 'Cancelada';
   const stepper = h('div', {}, ETAPAS.map((e, i) => h('div', { class: `step st-${slug(e.s)} ${nova ? (i === 0 ? 'cur' : '') : (cancelada ? '' : i < idx ? 'done' : i === idx ? 'cur' : '')}` },
     h('div', { class: 'bub' }, (!nova && !cancelada && i < idx) ? ic('check', 16) : ic(e.i, 16)), h('div', {}, h('b', { text: e.s }), h('small', { text: !nova && i === idx ? 'Etapa atual' : '' })))));
   const prox = PROX[o.status];
   const stSel = h('select', { class: 'sel', disabled: bloq || nova, style: { width: '100%' }, onchange: e => (E.status = e.target.value) }, CFG.status.filter(s => !prod || s === o.status || (s === PROX[o.status] && podeAvancar(o)) || s === ANT[o.status]).map(s => h('option', { value: s, text: s, selected: s === E.status })));
-  const savebar = h('div', { class: 'savebar' },
+  const savebar = leitura ? null : h('div', { class: 'savebar' },
     !nova && podeAvancar(o) ? h('button', { class: 'btn', disabled: bloq, onclick: () => salvar({ status: prox }) }, etapa(o.status).acao, ic('right', 17)) : null,
     h('button', { class: 'btn pri', disabled: bloq, onclick: () => salvar() }, ic('check', 18), 'Salvar'));
   const aside = h('aside', {},
@@ -476,16 +478,16 @@ async function viewOrdem(id, qs) {
       cancelada ? h('div', { class: 'note warn', style: { marginTop: '14px', marginBottom: 0 } }, ic('alert', 18), 'OP cancelada.') : null,
       o.entregue_em ? h('div', { class: 'sub', style: { marginTop: '12px' }, text: 'Entregue em ' + dt(o.entregue_em) }) : null,
       h('div', { class: 'actions' },
-        h('button', { class: 'btn pri', disabled: bloq, onclick: () => salvar() }, ic('check', 18), 'Salvar'),
+        leitura ? null : h('button', { class: 'btn pri', disabled: bloq, onclick: () => salvar() }, ic('check', 18), 'Salvar'),
         !nova && podeAvancar(o) ? h('button', { class: 'btn', disabled: bloq, onclick: () => salvar({ status: prox }) }, etapa(o.status).acao, ic('right', 17)) : null,
         !nova && prod && ANT[o.status] ? h('button', { class: 'btn', onclick: () => salvar({ status: ANT[o.status] }) }, ic('left', 17), 'Voltar para ' + ANT[o.status].toLowerCase()) : null,
         !nova ? h('button', { class: 'btn', onclick: () => imprimeFicha({ ...E, numero: o.numero }) }, ic('print', 17), 'Imprimir ficha') : null,
-        !nova && !prod && o.status !== 'Cancelada' && o.status !== 'Entregue' ? h('button', { class: 'btn danger ghost', onclick: async () => { if (await confirmar('Cancelar esta OP?', `A OP ${o.numero} ficará como cancelada e deixará de entrar nos totais.`, 'Cancelar OP')) salvar({ status: 'Cancelada' }); } }, 'Cancelar OP') : null),
-      !nova ? h('label', { class: 'field', style: { marginTop: '16px' } }, h('span', { class: 'l', text: 'Alterar status manualmente' }), stSel) : null),
+        !nova && podeEditar() && o.status !== 'Cancelada' && o.status !== 'Entregue' ? h('button', { class: 'btn danger ghost', onclick: async () => { if (await confirmar('Cancelar esta OP?', `A OP ${o.numero} ficará como cancelada e deixará de entrar nos totais.`, 'Cancelar OP')) salvar({ status: 'Cancelada' }); } }, 'Cancelar OP') : null),
+      !nova && !leitura ? h('label', { class: 'field', style: { marginTop: '16px' } }, h('span', { class: 'l', text: 'Alterar status manualmente' }), stSel) : null),
     h('div', { class: 'card' }, h('h3', { text: 'Resultado' }), h('div', { class: 'prog' }, h('div', { class: 'bar' }, progBar), progLbl), aparas),
     nova ? null : h('div', { class: 'card' }, h('h3', { text: 'Histórico' }), h('div', { class: 'hist' }, (o.historico || []).map(x => h('div', {}, h('b', { text: x.acao }), x.detalhe ? ' — ' + x.detalhe : '', h('br'), `${new Date(x.quando).toLocaleString('pt-BR')} · ${x.usuario || ''}`)))));
   shell('ordens', [
-    pageHead(nova ? 'Nova ordem de produção' : 'OP nº ' + o.numero, nova ? 'Preencha como na ficha de papel.' : `${o.cliente_nome} · criada em ${dt(o.data)}`, nova ? [] : [pill(o.status), prod ? null : h('a', { class: 'btn', href: '#/ordem/lote?copiar=' + o.id }, ic('copy', 17), 'Duplicar'), prod ? null : h('button', { class: 'btn', onclick: () => compartilhar({ tipo: 'ordem', ref: o.id, clienteCod: o.cliente_cod, titulo: 'Enviar acompanhamento da OP ' + o.numero, mensagem: l => 'Olá! Acompanhe o andamento do seu pedido nº ' + o.numero + ' da ' + CFG.empresa + ' por este link: ' + l }) }, ic('chat', 17), 'Enviar ao cliente')], ['#/ordens', 'Ordens']),
+    pageHead(nova ? 'Nova ordem de produção' : 'OP nº ' + o.numero, nova ? 'Preencha como na ficha de papel.' : `${o.cliente_nome} · criada em ${dt(o.data)}`, nova ? [] : [pill(o.status), !podeEditar() ? null : h('a', { class: 'btn', href: '#/ordem/lote?copiar=' + o.id }, ic('copy', 17), 'Duplicar'), !podeEditar() ? null : h('button', { class: 'btn', onclick: () => compartilhar({ tipo: 'ordem', ref: o.id, clienteCod: o.cliente_cod, titulo: 'Enviar acompanhamento da OP ' + o.numero, mensagem: l => 'Olá! Acompanhe o andamento do seu pedido nº ' + o.numero + ' da ' + CFG.empresa + ' por este link: ' + l }) }, ic('chat', 17), 'Enviar ao cliente')], ['#/ordens', 'Ordens']),
     grupoBanner,
     prod ? h('div', { class: 'note' }, ic('info', 18), 'Perfil Produção: você preenche Extrusão e Corte e solda e avança a etapa.') : null,
     h('div', { class: 'sheet' + (prod ? ' prodrole' : '') }, h('div', { class: 'fcol' },   /* mobile2 */
@@ -606,7 +608,7 @@ async function viewRelatorio() {
   const sub = () => (E.cliente_cod ? E.cliente_nome : 'Todos os clientes') + ' · ' + ((rp.filtro().de || rp.filtro().ate) ? (dt(rp.filtro().de) || 'início') + ' a ' + (dt(rp.filtro().ate) || 'hoje') : 'todo o período');
   shell('relatorio', [pageHead('Relatório de produção', 'Somas automáticas: pedido, produzido e entregue, por cliente, cor, litros, reforço e formato.',
       [csv, h('button', { class: 'btn', onclick: () => rp.dados() && imprimeResumo('Resumo de produção', sub(), rp.dados()) }, ic('print', 17), 'Imprimir'),
-        ME.papel !== 'producao' ? h('button', { class: 'btn', onclick: () => compartilhar(E.cliente_cod
+        podeEditar() ? h('button', { class: 'btn', onclick: () => compartilhar(E.cliente_cod
           ? { tipo: 'cliente', ref: E.cliente_cod, de: rp.filtro().de, ate: rp.filtro().ate, clienteCod: E.cliente_cod, titulo: 'Enviar relatório a ' + E.cliente_nome, mensagem: l => 'Olá! Segue o relatório dos seus pedidos na ' + CFG.empresa + ': ' + l }
           : { tipo: 'resumo', de: rp.filtro().de, ate: rp.filtro().ate, titulo: 'Enviar resumo de produção', mensagem: l => 'Resumo de produção da ' + CFG.empresa + ' (' + sub() + '): ' + l }) }, ic('chat', 17), 'Enviar') : null]),
     h('div', { class: 'card', style: { maxWidth: '520px' } }, clienteAuto(E, false, () => rp.carrega())), rp.el]);
@@ -711,10 +713,10 @@ async function viewCliente(cod, pg) {
   const resumoCli = resumoProducao({ cliente: () => c.cod });
   const nOrd = r.porStatus.reduce((a, x) => a + x.n, 0), totPed = r.porStatus.reduce((a, x) => a + x.kg, 0), totPro = r.porStatus.reduce((a, x) => a + x.prod, 0);
   shell('clientes', [
-    pageHead(c.nome, null, [h('a', { class: 'btn', href: '/api/export/ordens.csv?cliente=' + c.cod, download: '' }, ic('download', 17), 'Excel'), h('button', { class: 'btn', onclick: async () => imprimeRelatorio(c, await api('GET', `/api/clientes/${cod}?limite=1000`), await api('GET', '/api/relatorio?cliente=' + cod)) }, ic('print', 17), 'Imprimir relatório'),
-      ME.papel !== 'producao' ? h('button', { class: 'btn', onclick: () => compartilhar({ tipo: 'cliente', ref: c.cod, de: resumoCli.filtro().de, ate: resumoCli.filtro().ate, fone: c.telefone, titulo: 'Enviar relatório a ' + c.nome, mensagem: l => 'Olá! Segue o relatório dos seus pedidos na ' + CFG.empresa + ': ' + l }) }, ic('chat', 17), 'Enviar ao cliente') : null,
-      ME.papel !== 'producao' ? h('a', { class: 'btn', href: '#/ordem/lote?cliente=' + c.cod }, ic('copy', 17), 'Lançar várias') : null,
-      ME.papel !== 'producao' ? h('a', { class: 'btn pri', href: '#/ordem/novo?cliente=' + c.cod }, ic('plus', 18), 'Nova OP') : null], ['#/clientes', 'Clientes']),
+    pageHead(c.nome, null, [h('a', { class: 'btn', href: '#/precos?cliente=' + c.cod }, ic('tag', 17), 'Preços'), h('a', { class: 'btn', href: '/api/export/ordens.csv?cliente=' + c.cod, download: '' }, ic('download', 17), 'Excel'), h('button', { class: 'btn', onclick: async () => imprimeRelatorio(c, await api('GET', `/api/clientes/${cod}?limite=1000`), await api('GET', '/api/relatorio?cliente=' + cod)) }, ic('print', 17), 'Imprimir relatório'),
+      podeEditar() ? h('button', { class: 'btn', onclick: () => compartilhar({ tipo: 'cliente', ref: c.cod, de: resumoCli.filtro().de, ate: resumoCli.filtro().ate, fone: c.telefone, titulo: 'Enviar relatório a ' + c.nome, mensagem: l => 'Olá! Segue o relatório dos seus pedidos na ' + CFG.empresa + ': ' + l }) }, ic('chat', 17), 'Enviar ao cliente') : null,
+      podeEditar() ? h('a', { class: 'btn', href: '#/ordem/lote?cliente=' + c.cod }, ic('copy', 17), 'Lançar várias') : null,
+      podeEditar() ? h('a', { class: 'btn pri', href: '#/ordem/novo?cliente=' + c.cod }, ic('plus', 18), 'Nova OP') : null], ['#/clientes', 'Clientes']),
     h('div', { class: 'card' }, h('div', { class: 'cli-head' }, h('div', { class: 'avatar lg', text: iniciais(c.nome) }), h('div', {}, h('b', { style: { fontSize: '17px' }, text: c.razao || c.nome }),
       h('div', { class: 'sub', text: [c.doc, c.telefone, c.cidade ? c.cidade + '/' + (c.uf || '') : ''].filter(Boolean).join(' · ') })))),
     h('div', { class: 'pipe', style: { marginBottom: '18px' } }, ETAPAS.map(e => h('div', { class: 'stage st-' + slug(e.s) }, h('div', { class: 't' }, ic(e.i, 18), e.s), h('b', { text: num((por[e.s] || {}).n || 0) }), h('small', { text: kg((por[e.s] || {}).kg || 0) + ' kg' })))),
@@ -735,6 +737,69 @@ function imprimeRelatorio(c, r, res) {
       h('tbody', {}, linhas, h('tr', { class: 'tot' }, h('td', { colspan: 5, text: 'Total (' + ativas.length + ' OPs)' }), h('td', { class: 'n', text: qtd(soma('qtd_pacote'), soma('qtd_kg')) }), h('td', { class: 'n', text: qtd(soma('corte_pacotes'), soma('corte_kg')) }), h('td', { colspan: 2 }))))),
     h('div', { class: 'rp-duas' }, miniRel('Por cor', res.cor, 'cor'), miniRel('Por litros', res.litros, 'litros'), miniRel('Por reforço', res.reforco, 'reforco'), miniRel('Por formato', res.formato, 'formato')));
   document.getElementById('print-area').replaceChildren(rel); imprimir('rel-h', 'Pedidos de ' + c.nome);
+}
+
+// ---------- precos praticados (ultimas vendas fechadas no Serp, 12 meses) ----------
+const brl = v => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: Math.abs(v) < 1 ? 4 : 2 }));
+const pctTxt = v => (v == null ? '—' : num(v, 1) + '%');
+// venda: [data, qtd, preco, preco com desconto, custo]
+const descPct = (preco, liq) => (preco > 0 && liq != null && liq < preco - 0.00005 ? (1 - liq / preco) * 100 : 0);
+const margemPct = (liq, custo) => (custo > 0 && liq > 0 ? ((liq - custo) / liq) * 100 : null);
+function precoCard(l, comCliente) {
+  const und = (l.und || 'un').toLowerCase(), vendas = [[l.data, l.qtd, l.preco, l.preco_liq, l.custo], ...l.hist];
+  const desc = descPct(l.preco, l.preco_liq), mg = margemPct(l.preco_liq, l.custo);
+  const det = h('div', { class: 'prhist', hidden: true }, h('div', { class: 'prh cab' }, ['Data', 'Qtd', 'Preço', 'C/ desconto', 'Custo'].map(t => h('span', { text: t }))),
+    vendas.map(v => h('div', { class: 'prh' }, h('span', { text: dt(v[0]) }), h('span', { text: num(v[1], v[1] % 1 ? 2 : 0) }), h('span', { text: brl(v[2]) }), h('span', { text: brl(v[3]) }), h('span', { text: brl(v[4]) }))));
+  const mais = h('div', { class: 'prmais' }, ic('clock', 14), vendas.length > 1 ? `Ver as últimas ${vendas.length} vendas` : 'Ver detalhes da venda');
+  return h('div', { class: 'card prcard', role: 'button', tabindex: 0, onclick: () => { det.hidden = !det.hidden; mais.lastChild.textContent = det.hidden ? (vendas.length > 1 ? `Ver as últimas ${vendas.length} vendas` : 'Ver detalhes da venda') : 'Esconder'; } },
+    h('div', { class: 'prtop' },
+      h('div', { class: 'grow' }, comCliente ? h('a', { class: 'prcli', href: '#/precos?cliente=' + l.cliente_cod, onclick: e => e.stopPropagation(), text: l.cliente_nome }) : null,
+        h('b', { class: 'prnome', text: l.descricao }), h('div', { class: 'sub', text: `cód. ${l.produto_cod} · última venda ${dt(l.data)} (${diasTxt(dias(l.data))})` })),
+      h('div', { class: 'prval' }, h('b', { text: brl(l.preco_liq ?? l.preco) }), h('small', { text: 'por ' + und + (desc ? ' · com desconto' : '') }))),
+    h('div', { class: 'prinfo' }, [['Quantidade', num(l.qtd, l.qtd % 1 ? 2 : 0) + ' ' + und], ['Sem desconto', brl(l.preco)], ['Desconto', desc ? pctTxt(desc) : '—'], ['Custo', l.custo ? brl(l.custo) : '—'], ['Margem', pctTxt(mg)]]
+      .map(([k, v]) => h('span', {}, k + ' ', h('b', { text: v })))), mais, det);
+}
+async function viewPrecos(qs) {
+  const par = new URLSearchParams(qs), cod = Number(par.get('cliente')) || 0;
+  if (cod) {   // produtos que o cliente comprou, o mais recente primeiro
+    const r = await api('GET', '/api/precos?cliente=' + cod), c = r.cliente, lista = h('div');
+    const pinta = t => {
+      const f = t.trim().toLowerCase(), pal = f.split(/\s+/).filter(Boolean);
+      const l = r.linhas.filter(x => !f || pal.every(w => x.descricao.toLowerCase().includes(w)) || String(x.produto_cod) === f);
+      lista.replaceChildren(...(l.length ? l.map(x => precoCard(x)) : [h('div', { class: 'tw' }, vazio(r.linhas.length ? 'Nenhum produto com esse nome' : 'Nenhuma venda nos últimos 12 meses', r.linhas.length ? 'Tente outra palavra.' : 'Este cliente não tem pedido de venda fechado no Serp no último ano.'))]));
+    };
+    shell('precos', [pageHead(c.nome, `${r.linhas.length} ${r.linhas.length === 1 ? 'produto comprado' : 'produtos comprados'} nos últimos 12 meses · ${r.atualizado ? 'atualizado ' + atras(r.atualizado) : 'aguardando sincronização'}`,
+      [h('a', { class: 'btn', href: '#/cliente/' + c.cod }, ic('building', 17), 'Pedidos de produção')], ['#/precos', 'Preços']),
+      r.linhas.length > 3 ? h('div', { class: 'tools' }, h('div', { class: 'inp search prbusca' }, ic('search', 18), h('input', { placeholder: 'Filtrar produto…', oninput: e => pinta(e.target.value) }))) : null, lista]);
+    pinta('');
+    return;
+  }
+  let modo = par.get('modo') === 'produto' ? 'produto' : 'cliente', termo = par.get('q') || '';
+  const box = h('div'), entrada = h('input', { placeholder: '', value: termo, autocomplete: 'off', enterKeyHint: 'search' });
+  let seq = 0;
+  const busca = async () => {
+    const n = ++seq, t = entrada.value.trim();
+    history.replaceState(null, '', '#/precos?modo=' + modo + (t ? '&q=' + encodeURIComponent(t) : ''));
+    if (modo === 'produto') {
+      if (t.length < 2) { box.replaceChildren(h('div', { class: 'sub', style: { padding: '6px 2px' }, text: 'Digite pelo menos 2 letras do produto (ex.: saco 100).' })); return; }
+      const r = await api('GET', '/api/precos?produto=' + encodeURIComponent(t)); if (n !== seq) return;
+      box.replaceChildren(...(r.linhas.length ? [h('div', { class: 'sub', style: { margin: '0 2px 10px' }, text: r.linhas.length >= 100 ? 'Mostrando as 100 vendas mais recentes — digite mais para refinar.' : r.linhas.length + (r.linhas.length === 1 ? ' resultado' : ' resultados') + ', a venda mais recente primeiro' }), ...r.linhas.map(x => precoCard(x, true))]
+        : [h('div', { class: 'tw' }, vazio('Nenhum produto encontrado', 'Tente outra palavra ou o código do produto.'))]));
+      return;
+    }
+    const l = await api('GET', '/api/precos/clientes?q=' + encodeURIComponent(t)); if (n !== seq) return;
+    box.replaceChildren(...(l.length ? [t ? null : h('div', { class: 'sub', style: { margin: '0 2px 10px' }, text: 'Clientes que compraram por último:' }),
+      h('div', { class: 'prclis' }, l.map(c => h('a', { class: 'card prclirow', href: '#/precos?cliente=' + c.cod }, h('div', { class: 'initials', text: iniciais(c.nome) }),
+        h('div', { class: 'grow' }, h('b', { text: c.nome }), h('div', { class: 'sub', text: [c.cidade ? c.cidade + (c.uf ? '/' + c.uf : '') : '', num(c.produtos) + (c.produtos === 1 ? ' produto' : ' produtos'), 'última compra ' + dt(c.ultima)].filter(Boolean).join(' · ') })), ic('right', 18))))]
+      : [h('div', { class: 'tw' }, vazio(t ? 'Nenhum cliente encontrado' : 'Ainda não há preços', t ? 'Confira o nome ou tente só uma parte dele.' : 'Os preços chegam do Serp junto com a sincronização do PC da cliente.'))]));
+  };
+  const seg = h('div', { class: 'seg' }, [['cliente', 'Por cliente', 'building'], ['produto', 'Por produto', 'box']].map(([m, t, i]) => h('button', { class: modo === m ? 'on' : '', onclick: () => {
+    modo = m; seg.querySelectorAll('button').forEach((b, k) => b.classList.toggle('on', ['cliente', 'produto'][k] === m)); ph(); entrada.focus(); busca(); } }, ic(i, 16), t)));
+  const ph = () => (entrada.placeholder = modo === 'produto' ? 'Digite o produto (ex.: saco 100 litros)' : 'Digite o nome da empresa');
+  entrada.addEventListener('input', debounce(busca, 300)); ph();
+  shell('precos', [pageHead('Preços praticados', 'Último preço vendido de cada produto para cada cliente, direto dos pedidos de venda do Serp (últimos 12 meses).'),
+    h('div', { class: 'tools' }, seg), h('div', { class: 'inp search prbusca' }, ic('search', 20), entrada), box]);
+  await busca();
 }
 
 /* compartilhar */
@@ -772,7 +837,7 @@ async function compartilhar(o) {   // o: { tipo, ref, de, ate, titulo, clienteCo
 
 // ---------- lancar varias OPs de uma vez (e duplicar) ----------
 async function viewLote(qs) {
-  if (ME.papel === 'producao') { location.hash = '#/ordens'; return; }
+  if (!podeEditar()) { location.hash = '#/ordens'; return; }
   const par = new URLSearchParams(qs);
   const E = { cliente_cod: null, cliente_nome: '', data: hoje() };
   const novoItem = (b = {}) => ({ litros: b.litros ?? null, reforco: b.reforco ?? null, formato: b.formato ?? null, largura: b.largura ?? null, comprimento: b.comprimento ?? null, espessura: b.espessura ?? null, gramatura: b.gramatura ?? null, cor: b.cor ?? '', qtd_pacote: b.qtd_pacote ?? null, qtd_kg: b.qtd_kg ?? null, obs: b.obs ?? '' });
@@ -845,7 +910,7 @@ async function viewUsuarios(pgIn) {
     h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, ['Usuário', 'Grupo no Serp', 'Papel', 'Senha deste sistema', 'Ativo'].map(t => h('th', { text: t })))),
       h('tbody', {}, us.map(u => h('tr', {}, h('td', {}, h('div', { class: 'cellrow' }, h('div', { class: 'initials', text: iniciais(u.usuario) }), h('span', { class: 'main', text: u.usuario }))), h('td', { text: u.grupo ?? '' }),
         h('td', {}, h('select', { class: 'sel', onchange: async e => { try { await api('PUT', '/api/usuarios/' + u.cod, { papel: e.target.value }); toast('Papel atualizado'); viewUsuarios(pg); } catch (x) { toast(x.message, 'erro'); e.target.value = u.papel; } } },
-          [['admin', 'Administrador'], ['escritorio', 'Escritório'], ['producao', 'Produção']].map(([v, t]) => h('option', { value: v, text: t, selected: v === u.papel }))),
+          [['admin', 'Administrador'], ['escritorio', 'Escritório'], ['vendedor', 'Vendedor'], ['producao', 'Produção']].map(([v, t]) => h('option', { value: v, text: t, selected: v === u.papel }))),
           u.papel === 'producao' ? etapasPicker(u) : null),
         h('td', {}, u.senha_web ? h('span', { class: 'tag', text: 'própria' }) : h('span', { class: 'sub', text: u.papel === 'admin' ? 'do Serp (1º acesso)' : 'não definida' }),
           h('button', { class: 'btn sm', style: { marginLeft: '8px' }, text: u.senha_web ? 'Trocar' : 'Definir', onclick: () => definirSenha(u, () => viewUsuarios(pg)) }),
@@ -856,7 +921,7 @@ async function viewUsuarios(pgIn) {
       seg.recentes.length ? h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, ['Quando', 'Usuário', 'IP', 'Resultado'].map(t => h('th', { text: t })))),
         h('tbody', {}, seg.recentes.slice(0, 20).map(a => h('tr', {}, h('td', { text: new Date(a.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }) }), h('td', { text: a.login || '—' }), h('td', { text: a.ip }),
           h('td', {}, h('span', { class: 'pill ' + (a.ok ? 'st-Entregue' : 'st-Cancelada'), text: { ok: 'Entrou', senha: 'Senha errada', usuario: 'Usuário inexistente', vazia: 'Senha vazia', sem_acesso_web: 'Sem acesso liberado', bloqueado: 'Bloqueado', desafio: 'Verificação falhou', robo: 'Robô barrado' }[a.motivo] || a.motivo }))))))) : h('div', { class: 'sub', text: 'Nenhum acesso registrado ainda.' })) : null,
-    h('p', { class: 'sub', text: 'Administrador: tudo. Escritório: cria e edita OPs. Produção: só vê a tela Ordens, apenas das etapas marcadas, e avança ou volta a OP uma etapa por vez.' })]);
+    h('p', { class: 'sub', text: 'Administrador: tudo. Escritório: cria e edita OPs. Vendedor: só consulta OPs, clientes e preços praticados, sem alterar nada. Produção: só vê a tela Ordens, apenas das etapas marcadas, e avança ou volta a OP uma etapa por vez.' })]);
 }
 // etapas que um funcionário do papel "Produção" enxerga e move (ex.: só Extrusão)
 function etapasPicker(u) {
@@ -876,6 +941,8 @@ async function rota() {
     if (ehProd() && p[0] !== 'ordens' && !(p[0] === 'ordem' && /^\d+$/.test(p[1] || ''))) { location.hash = '#/ordens'; return; }
     if (p[0] === 'ordens') return await viewOrdens(qs);
     if (p[0] === 'ordem' && p[1] === 'lote') return await viewLote(qs);
+    if (p[0] === 'ordem' && p[1] === 'novo' && !podeEditar()) { location.hash = '#/ordens'; return; }
+    if (p[0] === 'precos') return await viewPrecos(qs);
     if (p[0] === 'ordem') return await viewOrdem(p[1], qs);
     if (p[0] === 'clientes') return await viewClientes(qs);
     if (p[0] === 'relatorio') return await viewRelatorio();
