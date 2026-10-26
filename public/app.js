@@ -505,8 +505,8 @@ async function viewOrdem(id, qs) {
 }
 
 // ---------- resumo de producao ----------
-const LISTA_CORES = ['Marrom', 'Amarelo', 'Azul', 'Verde', 'Preto', 'Vermelho', 'Leitoso', 'Branco', 'Laranja'];
-const CORES = { leitoso: '#efe8d6', preto: '#1f2933', azul: '#2563eb', verde: '#16a34a', vermelho: '#dc2626', amarelo: '#eab308', branco: '#f8fafc', transparente: '#cbd5e1', cinza: '#94a3b8', laranja: '#f97316', rosa: '#ec4899', roxo: '#7c3aed', marrom: '#92400e' };
+const LISTA_CORES = ['Marrom', 'Amarelo', 'Azul', 'Verde', 'Preto', 'Vermelho', 'Leitoso', 'Branco', 'Laranja', 'Canela'];
+const CORES = { leitoso: '#efe8d6', canela: '#b5651d', preto: '#1f2933', azul: '#2563eb', verde: '#16a34a', vermelho: '#dc2626', amarelo: '#eab308', branco: '#f8fafc', transparente: '#cbd5e1', cinza: '#94a3b8', laranja: '#f97316', rosa: '#ec4899', roxo: '#7c3aed', marrom: '#92400e' };
 const cap = t => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 const isoLocal = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
 function periodoRapido(tipo) {
