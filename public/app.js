@@ -180,7 +180,7 @@ function renderLogin(msg) {
 
 // ---------- shell ----------
 function shell(ativo, conteudo) {
-  const links = ehProd() ? [['ordens', 'Ordens', 'board']] : [['painel', 'Painel', 'home'], ['ordens', 'Ordens', 'board'], ['clientes', 'Clientes', 'building'], ['precos', 'Preços', 'tag'], ['relatorio', 'Relatório', 'chart']];
+  const links = ehProd() ? [['ordens', 'Ordens', 'board']] : [['painel', 'Painel', 'home'], ['ordens', 'Ordens', 'board'], ['clientes', 'Clientes', 'building'], ['precos', 'Vendas', 'tag'], ['relatorio', 'Relatório', 'chart']];
   if (ME.papel === 'admin') links.push(['usuarios', 'Usuários', 'users']);
   const papel = { admin: 'Administrador', escritorio: 'Escritório', vendedor: 'Vendedor', producao: 'Produção' }[ME.papel];
   const cnt = h('span', { class: 'cnt', hidden: true }), syncTxt = h('div', {}, 'Verificando…'), syncDot = h('span', { class: 'dot off' });
@@ -713,7 +713,7 @@ async function viewCliente(cod, pg) {
   const resumoCli = resumoProducao({ cliente: () => c.cod });
   const nOrd = r.porStatus.reduce((a, x) => a + x.n, 0), totPed = r.porStatus.reduce((a, x) => a + x.kg, 0), totPro = r.porStatus.reduce((a, x) => a + x.prod, 0);
   shell('clientes', [
-    pageHead(c.nome, null, [h('a', { class: 'btn', href: '#/precos?cliente=' + c.cod }, ic('tag', 17), 'Preços'), h('a', { class: 'btn', href: '/api/export/ordens.csv?cliente=' + c.cod, download: '' }, ic('download', 17), 'Excel'), h('button', { class: 'btn', onclick: async () => imprimeRelatorio(c, await api('GET', `/api/clientes/${cod}?limite=1000`), await api('GET', '/api/relatorio?cliente=' + cod)) }, ic('print', 17), 'Imprimir relatório'),
+    pageHead(c.nome, null, [h('a', { class: 'btn', href: '#/precos?cliente=' + c.cod }, ic('tag', 17), 'Vendas e preços'), h('a', { class: 'btn', href: '/api/export/ordens.csv?cliente=' + c.cod, download: '' }, ic('download', 17), 'Excel'), h('button', { class: 'btn', onclick: async () => imprimeRelatorio(c, await api('GET', `/api/clientes/${cod}?limite=1000`), await api('GET', '/api/relatorio?cliente=' + cod)) }, ic('print', 17), 'Imprimir relatório'),
       podeEditar() ? h('button', { class: 'btn', onclick: () => compartilhar({ tipo: 'cliente', ref: c.cod, de: resumoCli.filtro().de, ate: resumoCli.filtro().ate, fone: c.telefone, titulo: 'Enviar relatório a ' + c.nome, mensagem: l => 'Olá! Segue o relatório dos seus pedidos na ' + CFG.empresa + ': ' + l }) }, ic('chat', 17), 'Enviar ao cliente') : null,
       podeEditar() ? h('a', { class: 'btn', href: '#/ordem/lote?cliente=' + c.cod }, ic('copy', 17), 'Lançar várias') : null,
       podeEditar() ? h('a', { class: 'btn pri', href: '#/ordem/novo?cliente=' + c.cod }, ic('plus', 18), 'Nova OP') : null], ['#/clientes', 'Clientes']),
@@ -759,47 +759,133 @@ function precoCard(l, comCliente) {
     h('div', { class: 'prinfo' }, [['Quantidade', num(l.qtd, l.qtd % 1 ? 2 : 0) + ' ' + und], ['Sem desconto', brl(l.preco)], ['Desconto', desc ? pctTxt(desc) : '—'], ['Custo', l.custo ? brl(l.custo) : '—'], ['Margem', pctTxt(mg)]]
       .map(([k, v]) => h('span', {}, k + ' ', h('b', { text: v })))), mais, det);
 }
-async function viewPrecos(qs) {
-  const par = new URLSearchParams(qs), cod = Number(par.get('cliente')) || 0;
-  if (cod) {   // produtos que o cliente comprou, o mais recente primeiro
-    const r = await api('GET', '/api/precos?cliente=' + cod), c = r.cliente, lista = h('div');
-    const pinta = t => {
-      const f = t.trim().toLowerCase(), pal = f.split(/\s+/).filter(Boolean);
-      const l = r.linhas.filter(x => !f || pal.every(w => x.descricao.toLowerCase().includes(w)) || String(x.produto_cod) === f);
-      lista.replaceChildren(...(l.length ? l.map(x => precoCard(x)) : [h('div', { class: 'tw' }, vazio(r.linhas.length ? 'Nenhum produto com esse nome' : 'Nenhuma venda nos últimos 12 meses', r.linhas.length ? 'Tente outra palavra.' : 'Este cliente não tem pedido de venda fechado no Serp no último ano.'))]));
-    };
-    shell('precos', [pageHead(c.nome, `${r.linhas.length} ${r.linhas.length === 1 ? 'produto comprado' : 'produtos comprados'} nos últimos 12 meses · ${r.atualizado ? 'atualizado ' + atras(r.atualizado) : 'aguardando sincronização'}`,
-      [h('a', { class: 'btn', href: '#/cliente/' + c.cod }, ic('building', 17), 'Pedidos de produção')], ['#/precos', 'Preços']),
-      r.linhas.length > 3 ? h('div', { class: 'tools' }, h('div', { class: 'inp search prbusca' }, ic('search', 18), h('input', { placeholder: 'Filtrar produto…', oninput: e => pinta(e.target.value) }))) : null, lista]);
-    pinta('');
-    return;
-  }
-  let modo = par.get('modo') === 'produto' ? 'produto' : 'cliente', termo = par.get('q') || '';
-  const box = h('div'), entrada = h('input', { placeholder: '', value: termo, autocomplete: 'off', enterKeyHint: 'search' });
-  let seq = 0;
-  const busca = async () => {
-    const n = ++seq, t = entrada.value.trim();
-    history.replaceState(null, '', '#/precos?modo=' + modo + (t ? '&q=' + encodeURIComponent(t) : ''));
-    if (modo === 'produto') {
-      if (t.length < 2) { box.replaceChildren(h('div', { class: 'sub', style: { padding: '6px 2px' }, text: 'Digite pelo menos 2 letras do produto (ex.: saco 100).' })); return; }
-      const r = await api('GET', '/api/precos?produto=' + encodeURIComponent(t)); if (n !== seq) return;
-      box.replaceChildren(...(r.linhas.length ? [h('div', { class: 'sub', style: { margin: '0 2px 10px' }, text: r.linhas.length >= 100 ? 'Mostrando as 100 vendas mais recentes — digite mais para refinar.' : r.linhas.length + (r.linhas.length === 1 ? ' resultado' : ' resultados') + ', a venda mais recente primeiro' }), ...r.linhas.map(x => precoCard(x, true))]
-        : [h('div', { class: 'tw' }, vazio('Nenhum produto encontrado', 'Tente outra palavra ou o código do produto.'))]));
-      return;
-    }
-    const l = await api('GET', '/api/precos/clientes?q=' + encodeURIComponent(t)); if (n !== seq) return;
-    box.replaceChildren(...(l.length ? [t ? null : h('div', { class: 'sub', style: { margin: '0 2px 10px' }, text: 'Clientes que compraram por último:' }),
-      h('div', { class: 'prclis' }, l.map(c => h('a', { class: 'card prclirow', href: '#/precos?cliente=' + c.cod }, h('div', { class: 'initials', text: iniciais(c.nome) }),
-        h('div', { class: 'grow' }, h('b', { text: c.nome }), h('div', { class: 'sub', text: [c.cidade ? c.cidade + (c.uf ? '/' + c.uf : '') : '', num(c.produtos) + (c.produtos === 1 ? ' produto' : ' produtos'), 'última compra ' + dt(c.ultima)].filter(Boolean).join(' · ') })), ic('right', 18))))]
-      : [h('div', { class: 'tw' }, vazio(t ? 'Nenhum cliente encontrado' : 'Ainda não há preços', t ? 'Confira o nome ou tente só uma parte dele.' : 'Os preços chegam do Serp junto com a sincronização do PC da cliente.'))]));
+// pesquisa de vendas: aba (vendas | produtos | clientes | ultimos) + filtros. Tudo fica na URL (voltar do navegador funciona)
+const FILTROS_VENDA = ['cliente', 'cq', 'produto', 'de', 'ate', 'numero', 'vendedor', 'cidade'];
+const PERIODOS = [['Tudo', null], ['7 dias', 7], ['30 dias', 30], ['90 dias', 90], ['6 meses', 182], ['Este mês', 'mes'], ['Mês passado', 'mesant']];
+function periodo(p) {
+  const d = new Date(), iso = isoLocal;
+  if (p == null) return ['', ''];
+  if (p === 'mes') return [iso(new Date(d.getFullYear(), d.getMonth(), 1)), ''];
+  if (p === 'mesant') return [iso(new Date(d.getFullYear(), d.getMonth() - 1, 1)), iso(new Date(d.getFullYear(), d.getMonth(), 0))];
+  return [iso(new Date(Date.now() - p * 864e5)), ''];
+}
+const palavras = t => String(t || '').toLowerCase().split(/\s+/).filter(Boolean);
+const bate = (desc, pal) => pal.length && pal.every(w => desc.toLowerCase().includes(w));
+const linkCli = (cod, nome) => h('a', { class: 'vdcli', href: '#/precos?cliente=' + cod, onclick: e => e.stopPropagation(), text: nome });
+// venda completa: cabecalho (cliente, data, numero, vendedor, total) + todos os itens
+function vendaCard(v, fixo, pal) {
+  const item = i => {
+    const [cod, desc, und, q, preco, liq, custo] = i, u = (und || 'un').toLowerCase(), d = descPct(preco, liq), mg = margemPct(liq, custo);
+    return h('div', { class: 'vditem' + (bate(desc, pal) ? ' hit' : '') },
+      h('div', { class: 'vdn' }, h('b', { text: desc }), h('small', { text: 'cód. ' + cod })),
+      h('div', { class: 'vdq', text: num(q, q % 1 ? 2 : 0) + ' ' + u }),
+      h('div', { class: 'vdp' }, h('b', { text: brl(liq ?? preco) }), d ? h('s', { text: brl(preco) }) : null),
+      h('div', { class: 'vdt', text: brl((liq ?? preco) * q) }),
+      h('div', { class: 'vdx' }, d ? h('span', { text: 'desconto ' + pctTxt(d) }) : null, custo ? h('span', { text: 'custo ' + brl(custo) }) : null, mg != null ? h('span', { text: 'margem ' + pctTxt(mg) }) : null));
   };
-  const seg = h('div', { class: 'seg' }, [['cliente', 'Por cliente', 'building'], ['produto', 'Por produto', 'box']].map(([m, t, i]) => h('button', { class: modo === m ? 'on' : '', onclick: () => {
-    modo = m; seg.querySelectorAll('button').forEach((b, k) => b.classList.toggle('on', ['cliente', 'produto'][k] === m)); ph(); entrada.focus(); busca(); } }, ic(i, 16), t)));
-  const ph = () => (entrada.placeholder = modo === 'produto' ? 'Digite o produto (ex.: saco 100 litros)' : 'Digite o nome da empresa');
-  entrada.addEventListener('input', debounce(busca, 300)); ph();
-  shell('precos', [pageHead('Preços praticados', 'Último preço vendido de cada produto para cada cliente, direto dos pedidos de venda do Serp (últimos 12 meses).'),
-    h('div', { class: 'tools' }, seg), h('div', { class: 'inp search prbusca' }, ic('search', 20), entrada), box]);
-  await busca();
+  return h('div', { class: 'card vdcard' },
+    h('div', { class: 'vdhead' },
+      h('div', { class: 'grow' }, fixo ? null : linkCli(v.cliente_cod, v.cliente_nome),
+        h('div', { class: 'sub', text: [dt(v.data) + (v.hora ? ' às ' + v.hora : ''), 'Venda ' + v.cod, v.nota ? 'NF ' + v.nota : '', v.vendedor ? 'Vendedor: ' + v.vendedor : ''].filter(Boolean).join(' · ') })),
+      h('div', { class: 'vdtot' }, h('b', { text: brl(v.total) }), h('small', { text: v.itens.length + (v.itens.length === 1 ? ' item' : ' itens') + ' · ' + diasTxt(dias(v.data)) }))),
+    h('div', { class: 'vditens' }, h('div', { class: 'vditem cab' }, ['Produto', 'Qtd', 'Preço un.', 'Total'].map(t => h('span', { text: t }))), v.itens.map(item)),
+    v.desconto || v.frete ? h('div', { class: 'sub vdrod', text: [v.desconto ? 'Desconto na venda: ' + brl(v.desconto) : '', v.frete ? 'Frete: ' + brl(v.frete) : ''].filter(Boolean).join(' · ') }) : null);
+}
+// um produto: ultimo preco, faixa de preco e, ao tocar, quem comprou (cada venda)
+function produtoCard(p, F) {
+  const und = (p.und || 'un').toLowerCase(), lista = h('div', { class: 'pdlista', hidden: true });
+  const mais = h('div', { class: 'prmais' }, ic('users', 14), `Ver quem comprou (${p.clientes} ${p.clientes === 1 ? 'cliente' : 'clientes'}, ${p.vendas} ${p.vendas === 1 ? 'venda' : 'vendas'})`);
+  let carregou = false;
+  const abre = async () => {
+    lista.hidden = !lista.hidden; mais.lastChild.textContent = lista.hidden ? `Ver quem comprou (${p.clientes} ${p.clientes === 1 ? 'cliente' : 'clientes'}, ${p.vendas} ${p.vendas === 1 ? 'venda' : 'vendas'})` : 'Esconder';
+    if (carregou || lista.hidden) return; carregou = true;
+    lista.replaceChildren(h('div', { class: 'sub', text: 'Carregando…' }));
+    const qs = new URLSearchParams(); FILTROS_VENDA.filter(k => F[k] && k !== 'produto').forEach(k => qs.set(k, F[k])); qs.set('produto_cod', p.produto_cod);
+    try {
+      const r = await api('GET', '/api/vendas/compradores?' + qs);
+      lista.replaceChildren(h('div', { class: 'pdrow cab' }, ['Data', 'Cliente', 'Qtd', 'Preço un.'].map(t => h('span', { text: t }))),
+        ...r.map(x => h('div', { class: 'pdrow' }, h('span', { text: dt(x.data) }),
+          h('span', {}, linkCli(x.cliente_cod, x.cliente_nome), h('small', { text: ['Venda ' + x.cod, x.nota ? 'NF ' + x.nota : '', x.vendedor || ''].filter(Boolean).join(' · ') })),
+          h('span', { text: num(x.qtd, x.qtd % 1 ? 2 : 0) + ' ' + und }),
+          h('span', {}, h('b', { text: brl(x.preco_liq ?? x.preco) }), descPct(x.preco, x.preco_liq) ? h('s', { text: brl(x.preco) }) : null))));
+    } catch (e) { lista.replaceChildren(h('div', { class: 'msg-err', text: e.message })); carregou = false; }
+  };
+  return h('div', { class: 'card prcard', role: 'button', tabindex: 0, onclick: e => { if (!e.target.closest('.pdlista')) abre(); } },
+    h('div', { class: 'prtop' },
+      h('div', { class: 'grow' }, h('b', { class: 'prnome', text: p.descricao }), h('div', { class: 'sub', text: `cód. ${p.produto_cod} · última venda ${dt(p.ultima)} para ${p.ultimo_cliente}` })),
+      h('div', { class: 'prval' }, h('b', { text: brl(p.ultimo_preco) }), h('small', { text: 'último preço / ' + und }))),
+    h('div', { class: 'prinfo' }, [['Vendido', num(p.qtd, p.qtd % 1 ? 2 : 0) + ' ' + und], ['Faturado', brl(p.valor)], ['Menor preço', brl(p.pmin)], ['Maior preço', brl(p.pmax)]]
+      .map(([k, v]) => h('span', {}, k + ' ', h('b', { text: v })))), mais, lista);
+}
+function clienteCard(c) {
+  return h('a', { class: 'card prclirow', href: '#/precos?cliente=' + c.cod }, h('div', { class: 'initials', text: iniciais(c.nome) }),
+    h('div', { class: 'grow' }, h('b', { text: c.nome }), h('div', { class: 'sub', text: [c.cidade ? c.cidade + (c.uf ? '/' + c.uf : '') : '', 'última compra ' + dt(c.ultima) + ' (' + diasTxt(dias(c.ultima)) + ')'].filter(Boolean).join(' · ') })),
+    h('div', { class: 'prval' }, h('b', { text: brl(c.total) }), h('small', { text: num(c.vendas) + (c.vendas === 1 ? ' venda' : ' vendas') })), ic('right', 18));
+}
+async function viewPrecos(qs) {
+  const par = new URLSearchParams(qs), F = {};
+  FILTROS_VENDA.forEach(k => (F[k] = par.get(k) || ''));
+  let aba = par.get('aba') || (F.cliente ? 'vendas' : (F.produto ? 'produtos' : 'vendas'));
+  const pg = { pagina: Number(par.get('pagina')) || 0, limite: 20 };
+  const cli = F.cliente ? ((await api('GET', '/api/vendas/clientes?cliente=' + F.cliente))[0] || (await api('GET', '/api/vendas/ultimos-precos?cliente=' + F.cliente)).cliente) : null;
+  const box = h('div'), resumo = h('div', { class: 'total' }), pagEl = h('div');
+  const url = () => { const p = new URLSearchParams(); FILTROS_VENDA.forEach(k => F[k] && p.set(k, F[k])); p.set('aba', aba); if (pg.pagina) p.set('pagina', pg.pagina); return '#/precos?' + p; };
+  const filtrosQs = () => { const p = new URLSearchParams(); FILTROS_VENDA.forEach(k => F[k] && p.set(k, F[k])); return p; };
+  let seq = 0;
+  async function carrega() {
+    const n = ++seq; history.replaceState(null, '', url());
+    pintaChips(); box.replaceChildren(h('div', { class: 'sub', style: { padding: '8px 2px' }, text: 'Carregando…' })); pagEl.replaceChildren(); resumo.replaceChildren(...[].filter(Boolean));
+    try {
+      const p = filtrosQs();
+      if (aba === 'vendas') {
+        p.set('limite', pg.limite); p.set('pagina', pg.pagina);
+        const r = await api('GET', '/api/vendas?' + p); if (n !== seq) return;
+        resumo.replaceChildren(...[h('span', {}, h('b', { text: num(r.total) }), r.total === 1 ? ' venda' : ' vendas'), h('span', {}, h('b', { text: brl(r.soma) }), ' vendidos'), F.cliente ? null : h('span', {}, h('b', { text: num(r.clientes) }), r.clientes === 1 ? ' cliente' : ' clientes'),
+          r.atualizado ? h('span', { class: 'sub', text: 'Serp atualizado ' + atras(r.atualizado) }) : h('span', { class: 'sub', text: 'Aguardando a 1ª sincronização das vendas' })].filter(Boolean));
+        const pal = palavras(F.produto);
+        box.replaceChildren(...(r.linhas.length ? r.linhas.map(v => vendaCard(v, !!F.cliente, pal)) : [h('div', { class: 'tw' }, vazio('Nenhuma venda encontrada', 'Mude os filtros ou o período.'))]));
+        pagEl.replaceChildren(pager(pg, r.total, () => { carrega(); window.scrollTo({ top: 0 }); }));
+      } else if (aba === 'produtos') {
+        const r = await api('GET', '/api/vendas/produtos?' + p); if (n !== seq) return;
+        resumo.replaceChildren(...[h('span', {}, h('b', { text: num(r.length) }), r.length === 1 ? ' produto' : ' produtos'), r.length >= 200 ? h('span', { class: 'sub', text: 'mostrando os 200 vendidos mais recentemente — use os filtros para refinar' }) : null].filter(Boolean));
+        box.replaceChildren(...(r.length ? r.map(x => produtoCard(x, F)) : [h('div', { class: 'tw' }, vazio('Nenhum produto encontrado', 'Tente outra palavra, o código do produto ou outro período.'))]));
+      } else if (aba === 'clientes') {
+        const r = await api('GET', '/api/vendas/clientes?' + p); if (n !== seq) return;
+        resumo.replaceChildren(...[h('span', {}, h('b', { text: num(r.length) }), r.length === 1 ? ' cliente' : ' clientes'), h('span', {}, h('b', { text: brl(r.reduce((a, c) => a + c.total, 0)) }), ' vendidos')].filter(Boolean));
+        box.replaceChildren(...(r.length ? [h('div', { class: 'prclis' }, r.map(clienteCard))] : [h('div', { class: 'tw' }, vazio('Nenhum cliente encontrado', 'Confira o nome ou mude o período.'))]));
+      } else {
+        const r = await api('GET', '/api/vendas/ultimos-precos?cliente=' + F.cliente); if (n !== seq) return;
+        const pal = palavras(F.produto), l = r.linhas.filter(x => !pal.length || bate(x.descricao, pal) || String(x.produto_cod) === F.produto.trim());
+        resumo.replaceChildren(...[h('span', {}, h('b', { text: num(l.length) }), l.length === 1 ? ' produto comprado' : ' produtos comprados'), h('span', { class: 'sub', text: 'último preço de cada um, nos últimos 12 meses' })].filter(Boolean));
+        box.replaceChildren(...(l.length ? l.map(x => precoCard(x)) : [h('div', { class: 'tw' }, vazio('Nenhum produto', 'Este cliente não tem compra com esse filtro.'))]));
+      }
+    } catch (e) { if (n === seq) box.replaceChildren(h('div', { class: 'note warn' }, ic('alert', 18), e.message)); }
+  }
+  const recarrega = debounce(() => { pg.pagina = 0; carrega(); }, 350);
+  // --- filtros ---
+  const campoF = (k, rot, ph, op = {}) => h('label', { class: 'avc' + (op.cls ? ' ' + op.cls : '') }, rot, h('input', { type: op.type || 'text', value: F[k], placeholder: ph || '', inputMode: op.im || null, autocomplete: 'off',
+    [op.type === 'date' ? 'onchange' : 'oninput']: e => { F[k] = e.target.value.trim(); recarrega(); } }));
+  const chipsEl = h('div', { class: 'chips prchips' });
+  const pintaChips = () => chipsEl.replaceChildren(...PERIODOS.map(([t, d]) => { const [de, ate] = periodo(d), on = F.de === de && F.ate === ate;
+    return h('button', { type: 'button', class: 'chip' + (on ? ' on' : ''), onclick: () => { F.de = de; F.ate = ate; avancado.querySelector('[data-k=de]').value = de; avancado.querySelector('[data-k=ate]').value = ate; pg.pagina = 0; carrega(); } }, t); }));
+  const deEl = campoF('de', 'De', '', { type: 'date' }), ateEl = campoF('ate', 'Até', '', { type: 'date' });
+  deEl.querySelector('input').dataset.k = 'de'; ateEl.querySelector('input').dataset.k = 'ate';
+  const avancado = h('div', { class: 'avanc prav', hidden: !(F.de || F.ate || F.numero || F.vendedor || F.cidade) },
+    deEl, ateEl, campoF('numero', 'Nº da venda ou NF', 'ex.: 16773', { im: 'numeric' }), campoF('vendedor', 'Vendedor', 'nome do vendedor'), F.cliente ? null : campoF('cidade', 'Cidade do cliente', 'ex.: Goiânia'));
+  const botAv = h('button', { type: 'button', class: 'btn sm ghost', onclick: () => { avancado.hidden = !avancado.hidden; botAv.lastChild.textContent = avancado.hidden ? 'Pesquisa avançada' : 'Menos filtros'; } }, ic('search', 15), avancado.hidden ? 'Pesquisa avançada' : 'Menos filtros');
+  const limpar = h('button', { type: 'button', class: 'btn sm ghost', onclick: () => { location.hash = F.cliente ? '#/precos?cliente=' + F.cliente + '&aba=' + aba : '#/precos?aba=' + aba; } }, 'Limpar filtros');
+  const filtros = h('div', { class: 'card prfiltros' },
+    h('div', { class: 'prlinha' }, F.cliente ? null : campoF('cq', 'Cliente', 'nome, código ou CNPJ', { cls: 'big' }), campoF('produto', 'Produto', 'ex.: saco 100 preto', { cls: 'big' })),
+    h('div', { class: 'prper' }, h('small', { class: 'sub', text: 'Período:' }), chipsEl), avancado, h('div', { class: 'prbot' }, botAv, limpar));
+  // --- abas ---
+  const ABAS = [['vendas', 'Vendas', 'clipboard'], ['produtos', 'Produtos', 'box'], ...(F.cliente ? [['ultimos', 'Últimos preços', 'tag']] : [['clientes', 'Clientes', 'building']])];
+  if (!ABAS.some(a => a[0] === aba)) aba = 'vendas';
+  const seg = h('div', { class: 'seg wrap prseg' }, ABAS.map(([k, t, i]) => h('button', { class: aba === k ? 'on' : '', onclick: () => { aba = k; pg.pagina = 0; seg.querySelectorAll('button').forEach((b, j) => b.classList.toggle('on', ABAS[j][0] === k)); carrega(); } }, ic(i, 16), t)));
+  const cab = cli ? pageHead(cli.nome, [cli.cidade ? cli.cidade + (cli.uf ? '/' + cli.uf : '') : '', cli.vendas != null ? num(cli.vendas) + ' vendas · ' + brl(cli.total) + ' nos últimos 12 meses' : '', cli.ultima ? 'última compra ' + dt(cli.ultima) : ''].filter(Boolean).join(' · '),
+    [h('a', { class: 'btn', href: '#/cliente/' + cli.cod }, ic('building', 17), 'Pedidos de produção')], ['#/precos', 'Vendas e preços'])
+    : pageHead('Vendas e preços', 'Pedidos de venda fechados no Serp nos últimos 12 meses: o que cada cliente comprou, por quanto e quando.');
+  shell('precos', [cab, filtros, seg, resumo, box, pagEl]);
+  await carrega();
 }
 
 /* compartilhar */
