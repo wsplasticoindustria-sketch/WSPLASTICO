@@ -43,6 +43,7 @@ const IC = {
   plus: '<path d="M12 5v14M5 12h14"/>', print: '<path d="M7 9V3h10v6M7 17H5a2 2 0 01-2-2v-4a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2h-2"/><rect x="7" y="14" width="10" height="7" rx="1"/>',
   download: '<path d="M12 3v12M7 11l5 5 5-5M4 21h16"/>', search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.500-3.500"/>',
   check: '<path d="M5 12.500l4.500 4.500L19 7.500"/>', right: '<path d="M5 12h14M13 6l6 6-6 6"/>', left: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  bell: '<path d="M6 17V11a6 6 0 0112 0v6l1.500 2h-15zM10 21a2 2 0 004 0"/>',
   logout: '<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>', moon: '<path d="M21 13.500A8.500 8.500 0 1110.500 3a7 7 0 0010.500 10.500z"/>',
   refresh: '<path d="M20 11a8 8 0 00-14.500-3M4 5v4h4M4 13a8 8 0 0014.500 3M20 19v-4h-4"/>', box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
   scissors: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.600 7.600L20 18M8.600 16.400L20 6"/>', truck: '<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="18" r="1.800"/><circle cx="17" cy="18" r="1.800"/>',
@@ -97,6 +98,32 @@ async function api(method, url, body) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { const e = new Error(j.erro || 'Erro ' + r.status); e.desafio = !!j.desafio; throw e; }
   return j;
+}
+// ---------- notificacoes (push) ----------
+const b64 = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(s.length / 4) * 4, '=')), c => c.charCodeAt(0));
+const pushSuportado = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const pushPodeReceber = () => pushSuportado() && ME && (ME.papel === 'admin' || ME.papel === 'producao');
+async function pushInscricao() { try { return await (await navigator.serviceWorker.register('/sw.js')).pushManager.getSubscription(); } catch { return null; } }
+async function pushAtiva() {
+  if (Notification.permission === 'denied') throw new Error('Notificações bloqueadas neste aparelho. Libere nas configurações do navegador.');
+  if ((await Notification.requestPermission()) !== 'granted') throw new Error('Permissão não concedida');
+  const reg = await navigator.serviceWorker.register('/sw.js'); await navigator.serviceWorker.ready;
+  const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64((await api('GET', '/api/push/chave')).chave) });
+  await api('POST', '/api/push/inscrever', sub.toJSON());
+}
+async function pushDesativa() { const sub = await pushInscricao(); if (!sub) return; try { await api('POST', '/api/push/cancelar', { endpoint: sub.endpoint }); } catch { /* segue */ } await sub.unsubscribe(); }
+// botao de sino (um por barra); liga/desliga as notificacoes deste aparelho
+function botNotif() {
+  if (!pushPodeReceber()) return null;
+  const b = h('button', { title: 'Notificações' }); let ativo = false;
+  const pinta = () => { b.classList.toggle('on', ativo); b.title = ativo ? 'Notificações ativadas (toque para desativar)' : 'Ativar notificações neste aparelho'; };
+  b.replaceChildren(ic('bell', 18));
+  pushInscricao().then(s => { ativo = !!s && Notification.permission === 'granted'; pinta(); });
+  b.onclick = async () => {
+    try { if (ativo) { await pushDesativa(); ativo = false; toast('Notificações desativadas'); } else { await pushAtiva(); ativo = true; toast('Notificações ativadas neste aparelho'); } pinta(); }
+    catch (e) { toast(e.message, 'erro'); }
+  };
+  pinta(); return b;
 }
 const debounce = (fn, ms = 250) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
@@ -184,15 +211,15 @@ function shell(ativo, conteudo) {
   if (ME.papel === 'admin') links.push(['usuarios', 'Usuários', 'users']);
   const papel = { admin: 'Administrador', escritorio: 'Escritório', vendedor: 'Vendedor', producao: 'Produção' }[ME.papel];
   const cnt = h('span', { class: 'cnt', hidden: true }), syncTxt = h('div', {}, 'Verificando…'), syncDot = h('span', { class: 'dot off' });
-  const sair = async () => { await api('POST', '/api/logout', {}); ME = null; renderLogin(); };
+  const sair = async () => { if (pushSuportado()) { try { await pushDesativa(); } catch { /* segue */ } } await api('POST', '/api/logout', {}); ME = null; renderLogin(); };
   const botTema = h('button', { title: 'Tema claro/escuro', onclick: alternaTema }, ic('moon', 18)), botSair = h('button', { title: 'Sair', onclick: sair }, ic('logout', 18));
   const side = h('aside', { class: 'side' },
     h('div', { class: 'brand' }, logoImg('lgs auto'), h('small', { text: 'Ordem de Produção' + (CFG.versao ? ' · v' + CFG.versao : '') })),
     h('nav', {}, links.map(([k, t, i]) => h('a', { href: '#/' + k, class: ativo === k ? 'on' : '' }, ic(i, 19), t, k === 'ordens' ? cnt : null))),
     h('div', { class: 'sp' }), ehProd() ? null : h('div', { class: 'sync' }, syncDot, syncTxt),
-    h('div', { class: 'usercard' }, h('div', { class: 'avatar', text: iniciais(ME.usuario) }), h('div', {}, h('b', { text: ME.usuario.toLowerCase() }), h('small', { text: papel })), h('div', { class: 'ib' }, botTema, botSair)));
+    h('div', { class: 'usercard' }, h('div', { class: 'avatar', text: iniciais(ME.usuario) }), h('div', {}, h('b', { text: ME.usuario.toLowerCase() }), h('small', { text: papel })), h('div', { class: 'ib' }, botNotif(), botTema, botSair)));
   const mtop = h('div', { class: 'mtop' }, logoImg('lgt auto'), h('b', { text: 'Ordem de Produção' }),
-    h('div', { class: 'ib' }, h('button', { onclick: alternaTema }, ic('moon', 18)), h('button', { onclick: sair }, ic('logout', 18))));
+    h('div', { class: 'ib' }, botNotif(), h('button', { onclick: alternaTema }, ic('moon', 18)), h('button', { onclick: sair }, ic('logout', 18))));
   const tab = h('nav', { class: 'tabbar' }, links.map(([k, t, i]) => h('a', { href: '#/' + k, class: ativo === k ? 'on' : '' }, ic(i, 22), t)));
   $app.replaceChildren(h('div', { class: 'layout' }, side, h('div', {}, mtop, h('main', { class: 'content fade' }, conteudo))), tab);
   api('GET', '/api/resumo').then(r => {

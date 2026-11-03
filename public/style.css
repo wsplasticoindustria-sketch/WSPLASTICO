@@ -97,7 +97,7 @@ aside.side{position:sticky;top:0;align-self:start;height:100vh;border-right:1px 
 .avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#14b8a6,#0b7f72);display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;flex:none}
 .usercard b{display:block;color:var(--sideStrong);font-size:14px;line-height:1.2;text-transform:capitalize}.usercard small{color:var(--sideMut);font-size:12px}
 .usercard .ib{margin-left:auto;display:flex;gap:2px}
-.ib button{background:transparent;border:0;color:var(--sideMut);border-radius:8px;width:34px;height:34px;display:grid;place-items:center;cursor:pointer}.ib button:hover{background:var(--sideHover);color:var(--sideStrong)}
+.ib button{background:transparent;border:0;color:var(--sideMut);border-radius:8px;width:34px;height:34px;display:grid;place-items:center;cursor:pointer}.ib button.on{color:var(--a)}.ib button.on svg{fill:currentColor;fill-opacity:.25}.ib button:hover{background:var(--sideHover);color:var(--sideStrong)}
 main.content{padding:28px 36px 70px;max-width:1360px;width:100%;min-width:0}
 .layout>div,.grid>*,.sheet>*{min-width:0}
 html,body{overflow-x:clip}
