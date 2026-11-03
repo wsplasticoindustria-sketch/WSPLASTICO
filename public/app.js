@@ -218,7 +218,7 @@ function shell(ativo, conteudo) {
   const pintaSync = sy => {
     const velho = sy.ultimoOk && Date.now() - Date.parse(sy.ultimoOk) > 3600e3;
     syncDot.className = 'dot' + (!sy.ativo || velho ? ' off' : sy.erro ? ' err' : '');
-    syncTxt.textContent = sy.pedido ? 'Serp: atualização pedida, aguardando o PC…' : !sy.ativo ? 'Serp: aguardando 1ª sincronização' : sy.erro ? 'Serp: falha na última leitura' : `Serp · ${num(sy.clientes)} clientes · ${atras(sy.ultimoOk)}`;
+    syncTxt.textContent = !sy.ativo ? 'Serp: aguardando 1ª sincronização' : sy.erro ? 'Serp: falha na última leitura' : `Serp · ${num(sy.clientes)} clientes · ${atras(sy.ultimoOk)}`;
   };
   const botSync = ME.papel !== 'admin' ? null : h('button', { class: 'syncbtn', title: 'Sincronizar agora com o Serp' }, ic('refresh', 15));
   if (botSync) botSync.onclick = async () => {
