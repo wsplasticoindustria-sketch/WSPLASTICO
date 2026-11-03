@@ -61,7 +61,7 @@
         h('div', { class: 'pt' }, h('b', { text: e }), h('small', { text: quando ? dt(quando) : (atual ? 'Etapa atual' : feito ? 'Concluída' : (cancel ? '' : 'Próxima etapa')) })));
     }));
     const det = [['Produto', produto(o)], medidas(o) ? ['Medidas', medidas(o) + ' cm'] : null, o.espessura != null ? ['Espessura', num(o.espessura, 2)] : null, o.cor ? ['Cor', cap(o.cor)] : null,
-      ['Quantidade', qtd(o.qtd_pacote, o.qtd_kg) || '—'], ['Data do pedido', dt(o.data)]].filter(Boolean);
+      ['Quantidade', qtd(o.qtd_pacote, o.qtd_kg) || '—'], o.status === 'Entregue' && qtd(o.entregue_pacotes, o.entregue_kg) ? ['Quantidade entregue', qtd(o.entregue_pacotes, o.entregue_kg)] : null, ['Data do pedido', dt(o.data)]].filter(Boolean);
     return [hero, cancel ? null : h('section', { class: 'pcard' }, h('h2', { text: 'Andamento do pedido' }), passos),
       h('section', { class: 'pcard' }, h('h2', { text: 'Detalhes do pedido' }), h('div', { class: 'pdet' }, det.map(([k, v]) => h('div', {}, h('small', { text: k }), h('b', { text: v })))))];
   }

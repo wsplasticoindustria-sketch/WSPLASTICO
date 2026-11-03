@@ -479,17 +479,19 @@ async function viewOrdem(id, qs) {
   if (nova && qs) { const c = new URLSearchParams(qs).get('cliente'); if (c) { try { const r = await api('GET', '/api/clientes/' + c); o.cliente_cod = r.cliente.cod; o.cliente_nome = r.cliente.nome; } catch { /* segue sem vincular */ } } }
   const irmas = !nova && o.grupo_n > 1 ? (await api('GET', '/api/ordens?grupo=' + o.grupo + '&limite=100')).linhas.reverse() : [];
   const prod = ehProd(), leitura = ME.papel === 'vendedor', bloq = leitura || (o.status === 'Cancelada' && ME.papel !== 'admin'), dEsc = prod || bloq;
-  const dExt = bloq || (prod && o.status !== 'Em extrusão'), dCor = bloq || (prod && o.status !== 'Em corte e solda');   // producao preenche so a etapa em que a OP esta
+  const dExt = bloq || (prod && o.status !== 'Em extrusão'), dCor = bloq || (prod && o.status !== 'Em corte e solda'), dEnt = bloq || (prod && !['Pronta', 'Entregue'].includes(o.status));   // producao preenche so a etapa em que a OP esta
   const E = { ...o };
   const campo = (rot, k, op = {}) => {
     const dis = op.dis !== undefined ? op.dis : dEsc;
     return h('label', { class: 'field' }, h('span', { class: 'l', text: rot }), h('div', { class: 'inp' + (dis ? ' dis' : '') },
       h('input', { type: 'text', inputMode: op.dec ? 'decimal' : (op.int ? 'numeric' : null), value: dec(E[k]), disabled: dis, oninput: e => { E[k] = e.target.value; atualiza(); } }), op.suf ? h('span', { class: 'suf', text: op.suf }) : null));
   };
-  const progBar = h('i'), progLbl = h('div', { class: 'lbl' }), aparas = h('div', { class: 'sub', style: { marginTop: '10px' } });
+  const progBar = h('i'), progLbl = h('div', { class: 'lbl' }), aparas = h('div', { class: 'sub', style: { marginTop: '10px' } }), entrNota = h('div', { class: 'sub', style: { marginTop: '10px' } });
   function atualiza() {
     const ped = pn(E.qtd_kg), pro = pn(E.corte_kg), pct = ped ? Math.min(100, Math.round((pro / ped) * 100)) : 0;
     progBar.style.width = pct + '%'; progLbl.replaceChildren(h('span', { text: `${kg(pro)} kg cortados` }), h('span', { text: `${pct}% de ${kg(ped)} kg` }));
+    const pe = E.entregue_pacotes === '' || E.entregue_pacotes == null ? null : pn(E.entregue_pacotes), pp = pn(E.qtd_pacote);
+    entrNota.textContent = pe == null ? '' : pe < pp ? `Entrega parcial: faltam ${num(pp - pe)} pacotes do pedido` : pe > pp ? `Entregue ${num(pe - pp)} pacotes a mais que o pedido` : 'Pedido entregue por completo';
     const ext = pn(E.ext_kg), ap = pn(E.corte_aparas_kg); aparas.textContent = ext && E.corte_aparas_kg !== '' && E.corte_aparas_kg != null ? `Aparas: ${num((ap / ext) * 100, 1)}% do que foi extrusado` : '';
   }
   async function salvar(extra = {}) {
@@ -530,7 +532,7 @@ async function viewOrdem(id, qs) {
   shell('ordens', [
     pageHead(nova ? 'Nova ordem de produção' : 'OP nº ' + o.numero, nova ? 'Preencha como na ficha de papel.' : `${o.cliente_nome} · criada em ${dt(o.data)}`, nova ? [] : [pill(o.status), !podeEditar() ? null : h('a', { class: 'btn', href: '#/ordem/lote?copiar=' + o.id }, ic('copy', 17), 'Duplicar'), !podeEditar() ? null : h('button', { class: 'btn', onclick: () => compartilhar({ tipo: 'ordem', ref: o.id, clienteCod: o.cliente_cod, titulo: 'Enviar acompanhamento da OP ' + o.numero, mensagem: l => 'Olá! Acompanhe o andamento do seu pedido nº ' + o.numero + ' da ' + CFG.empresa + ' por este link: ' + l }) }, ic('chat', 17), 'Enviar ao cliente')], ['#/ordens', 'Ordens']),
     grupoBanner,
-    prod ? h('div', { class: 'note' }, ic('info', 18), 'Perfil Produção: você preenche Extrusão e Corte e solda e avança a etapa.') : null,
+    prod ? h('div', { class: 'note' }, ic('info', 18), 'Perfil Produção: você preenche Extrusão, Corte e solda e Entrega e avança a etapa.') : null,
     h('div', { class: 'sheet' + (prod ? ' prodrole' : '') }, h('div', { class: 'fcol' },   /* mobile2 */
       h('div', { class: 'card' }, h('h3', {}, h('span', { class: 'ico' }, ic('clipboard', 17)), 'Pedido'),
         h('div', { class: 'row r3', style: { marginBottom: '14px' } }, h('label', { class: 'field' }, h('span', { class: 'l', text: 'Nº' }), h('div', { class: 'inp dis' }, h('input', { value: nova ? 'automático' : o.numero, disabled: true }))),
@@ -541,7 +543,8 @@ async function viewOrdem(id, qs) {
           campo('Qnt de pacote', 'qtd_pacote', { int: 1, suf: 'pct' }), campo('Qnt de Kg', 'qtd_kg', { dec: 1, suf: 'kg' })),
         h('label', { class: 'field', style: { marginTop: '14px' } }, h('span', { class: 'l', text: 'Obs.' }), h('textarea', { class: 'ta', disabled: dEsc, oninput: e => (E.obs = e.target.value) }, E.obs || ''))),
       h('div', { class: 'card etapa-card' }, h('h3', {}, h('span', { class: 'ico' }, ic('layers', 17)), 'Extrusão'), h('div', { class: 'row' }, campo('Qnt de bobina', 'ext_bobinas', { int: 1, dis: dExt }), campo('Kg total', 'ext_kg', { dec: 1, suf: 'kg', dis: dExt }), campo('Extrusor', 'ext_extrusor', { dis: dExt }))),
-      h('div', { class: 'card etapa-card' }, h('h3', {}, h('span', { class: 'ico' }, ic('scissors', 17)), 'Corte e solda'), h('div', { class: 'row' }, campo('Pacotes', 'corte_pacotes', { int: 1, suf: 'pct', dis: dCor }), campo('Kg total', 'corte_kg', { dec: 1, suf: 'kg', dis: dCor }), campo('Aparas', 'corte_aparas_kg', { dec: 1, suf: 'kg', dis: dCor })))), aside), savebar]);
+      h('div', { class: 'card etapa-card' }, h('h3', {}, h('span', { class: 'ico' }, ic('scissors', 17)), 'Corte e solda'), h('div', { class: 'row' }, campo('Pacotes', 'corte_pacotes', { int: 1, suf: 'pct', dis: dCor }), campo('Kg total', 'corte_kg', { dec: 1, suf: 'kg', dis: dCor }), campo('Aparas', 'corte_aparas_kg', { dec: 1, suf: 'kg', dis: dCor }))),
+      h('div', { class: 'card etapa-card' }, h('h3', {}, h('span', { class: 'ico' }, ic('truck', 17)), 'Entrega'), h('div', { class: 'row' }, campo('Pacotes entregues', 'entregue_pacotes', { int: 1, suf: 'pct', dis: dEnt }), campo('Kg entregues', 'entregue_kg', { dec: 1, suf: 'kg', dis: dEnt })), entrNota)), aside), savebar]);
   atualiza();
 }
 
