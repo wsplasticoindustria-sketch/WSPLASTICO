@@ -451,7 +451,7 @@ html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
   /* ficha */
   .row{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
   .row.r3{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)}.row.r3>:nth-child(3){grid-column:1/-1}
-  .fcol{display:flex;flex-direction:column}.sheet.prodrole .pcard{order:-1}   /* perfil Producao: Extrusao e Corte vem primeiro */
+  .fcol{display:flex;flex-direction:column}.sheet.prodrole .etapa-card{order:-1}   /* perfil Producao: Extrusao e Corte vem primeiro */
   .tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
   .tile{padding:14px 6px;min-height:64px}
   .seg.wrap button{flex:1 1 auto;justify-content:center}

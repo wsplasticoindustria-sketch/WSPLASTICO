@@ -529,8 +529,8 @@ async function viewOrdem(id, qs) {
         h('div', { class: 'row' }, campo('Largura', 'largura', { dec: 1, suf: 'cm' }), campo('Comprimento', 'comprimento', { dec: 1, suf: 'cm' }), campo('Espessura', 'espessura', { dec: 1 }), campo('Gramatura', 'gramatura', { dec: 1 }), campoCor(E, dEsc),
           campo('Qnt de pacote', 'qtd_pacote', { int: 1, suf: 'pct' }), campo('Qnt de Kg', 'qtd_kg', { dec: 1, suf: 'kg' })),
         h('label', { class: 'field', style: { marginTop: '14px' } }, h('span', { class: 'l', text: 'Obs.' }), h('textarea', { class: 'ta', disabled: dEsc, oninput: e => (E.obs = e.target.value) }, E.obs || ''))),
-      h('div', { class: 'card pcard' }, h('h3', {}, h('span', { class: 'ico' }, ic('layers', 17)), 'Extrusão'), h('div', { class: 'row' }, campo('Qnt de bobina', 'ext_bobinas', { int: 1, dis: dExt }), campo('Kg total', 'ext_kg', { dec: 1, suf: 'kg', dis: dExt }), campo('Extrusor', 'ext_extrusor', { dis: dExt }))),
-      h('div', { class: 'card pcard' }, h('h3', {}, h('span', { class: 'ico' }, ic('scissors', 17)), 'Corte e solda'), h('div', { class: 'row' }, campo('Pacotes', 'corte_pacotes', { int: 1, suf: 'pct', dis: dCor }), campo('Kg total', 'corte_kg', { dec: 1, suf: 'kg', dis: dCor }), campo('Aparas', 'corte_aparas_kg', { dec: 1, suf: 'kg', dis: dCor })))), aside), savebar]);
+      h('div', { class: 'card etapa-card' }, h('h3', {}, h('span', { class: 'ico' }, ic('layers', 17)), 'Extrusão'), h('div', { class: 'row' }, campo('Qnt de bobina', 'ext_bobinas', { int: 1, dis: dExt }), campo('Kg total', 'ext_kg', { dec: 1, suf: 'kg', dis: dExt }), campo('Extrusor', 'ext_extrusor', { dis: dExt }))),
+      h('div', { class: 'card etapa-card' }, h('h3', {}, h('span', { class: 'ico' }, ic('scissors', 17)), 'Corte e solda'), h('div', { class: 'row' }, campo('Pacotes', 'corte_pacotes', { int: 1, suf: 'pct', dis: dCor }), campo('Kg total', 'corte_kg', { dec: 1, suf: 'kg', dis: dCor }), campo('Aparas', 'corte_aparas_kg', { dec: 1, suf: 'kg', dis: dCor })))), aside), savebar]);
   atualiza();
 }
 
