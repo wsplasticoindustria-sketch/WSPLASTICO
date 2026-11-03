@@ -110,6 +110,9 @@ async function pushAtiva() {
   const reg = await navigator.serviceWorker.register('/sw.js'); await navigator.serviceWorker.ready;
   const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64((await api('GET', '/api/push/chave')).chave) });
   await api('POST', '/api/push/inscrever', sub.toJSON());
+  const t = await api('POST', '/api/push/teste', {});   // manda uma notificacao de teste e mostra o que aconteceu
+  const falha = t.resultados.find(r => !r.ok);
+  if (!t.aparelhos || falha) throw new Error(!t.aparelhos ? 'Não foi possível registrar este aparelho' : 'O envio falhou (código ' + (falha.status || 'sem resposta') + (falha.erro ? ': ' + falha.erro : '') + ')');
 }
 async function pushDesativa() { const sub = await pushInscricao(); if (!sub) return; try { await api('POST', '/api/push/cancelar', { endpoint: sub.endpoint }); } catch { /* segue */ } await sub.unsubscribe(); }
 // botao de sino (um por barra); liga/desliga as notificacoes deste aparelho
