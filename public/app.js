@@ -1035,7 +1035,7 @@ async function viewUsuarios(pgIn) {
     pager(pg, todos.length, () => viewUsuarios(pg)),
     seg ? h('div', { class: 'card', style: { marginTop: '22px' } }, h('h3', {}, h('span', { class: 'ico' }, ic('shield', 17)), 'Segurança dos acessos', h('small', { text: 'últimas 24 h: ' + seg.resumo.ok + ' entradas · ' + seg.resumo.falhas + ' falhas · ' + seg.resumo.bloqueios + ' bloqueios' })),
       seg.recentes.length ? h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, ['Quando', 'Usuário', 'IP', 'Resultado'].map(t => h('th', { text: t })))),
-        h('tbody', {}, seg.recentes.slice(0, 20).map(a => h('tr', {}, h('td', { text: new Date(a.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }) }), h('td', { text: a.login || '—' }), h('td', { text: a.ip }),
+        h('tbody', {}, seg.recentes.map(a => h('tr', {}, h('td', { text: new Date(a.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' }) }), h('td', { text: a.login || '—' }), h('td', { text: a.ip }),
           h('td', {}, h('span', { class: 'pill ' + (a.ok ? 'st-Entregue' : 'st-Cancelada'), text: { ok: 'Entrou', senha: 'Senha errada', usuario: 'Usuário inexistente', vazia: 'Senha vazia', sem_acesso_web: 'Sem acesso liberado', bloqueado: 'Bloqueado', desafio: 'Verificação falhou', robo: 'Robô barrado' }[a.motivo] || a.motivo }))))))) : h('div', { class: 'sub', text: 'Nenhum acesso registrado ainda.' })) : null,
     h('p', { class: 'sub', text: 'Administrador: tudo. Escritório: cria e edita OPs. Vendedor: só consulta OPs, clientes e preços praticados, sem alterar nada. Produção: só vê a tela Ordens, apenas das etapas marcadas, e avança ou volta a OP uma etapa por vez.' })]);
 }
