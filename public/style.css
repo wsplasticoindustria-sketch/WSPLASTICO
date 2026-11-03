@@ -92,6 +92,7 @@ aside.side{position:sticky;top:0;align-self:start;height:100vh;border-right:1px 
 .side nav a .cnt{margin-left:auto;background:var(--sideCnt);color:var(--sideCntTx);border-radius:999px;font-size:12px;padding:1px 9px}
 .side .sp{flex:1}
 .sync{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;background:var(--sideBox);font-size:12.5px;color:var(--sideMut);margin-bottom:12px}
+.syncbtn{margin-left:auto;flex:none;width:26px;height:26px;border:0;border-radius:7px;background:transparent;color:var(--sideMut);display:grid;place-items:center;cursor:pointer}.syncbtn:hover{background:var(--sideHover)}.syncbtn:disabled{opacity:.6;cursor:default}.syncbtn.girando svg{animation:gira .8s linear infinite}@keyframes gira{to{transform:rotate(360deg)}}
 .dot{width:8px;height:8px;border-radius:50%;background:#4ade80;margin-top:6px;flex:none;box-shadow:0 0 0 3px rgba(74,222,128,.18)}.dot.err{background:#f87171;box-shadow:0 0 0 3px rgba(248,113,113,.18)}.dot.off{background:#94a3b8;box-shadow:none}
 .usercard{display:flex;align-items:center;gap:10px;padding:10px;border-top:1px solid var(--sideBd);margin-top:4px}
 .avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#14b8a6,#0b7f72);display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;flex:none}

@@ -214,12 +214,25 @@ function shell(ativo, conteudo) {
   if (ME.papel === 'admin') links.push(['usuarios', 'Usuários', 'users']);
   const papel = { admin: 'Administrador', escritorio: 'Escritório', vendedor: 'Vendedor', producao: 'Produção' }[ME.papel];
   const cnt = h('span', { class: 'cnt', hidden: true }), syncTxt = h('div', {}, 'Verificando…'), syncDot = h('span', { class: 'dot off' });
+  // "Sincronizar": pede ao agente do PC da cliente para ler o Serp agora (so o administrador pode pedir)
+  const pintaSync = sy => {
+    const velho = sy.ultimoOk && Date.now() - Date.parse(sy.ultimoOk) > 3600e3;
+    syncDot.className = 'dot' + (!sy.ativo || velho ? ' off' : sy.erro ? ' err' : '');
+    syncTxt.textContent = sy.pedido ? 'Serp: atualização pedida, aguardando o PC…' : !sy.ativo ? 'Serp: aguardando 1ª sincronização' : sy.erro ? 'Serp: falha na última leitura' : `Serp · ${num(sy.clientes)} clientes · ${atras(sy.ultimoOk)}`;
+  };
+  const botSync = ME.papel !== 'admin' ? null : h('button', { class: 'syncbtn', title: 'Sincronizar agora com o Serp' }, ic('refresh', 15));
+  if (botSync) botSync.onclick = async () => {
+    botSync.disabled = true; botSync.classList.add('girando');
+    try { await api('POST', '/api/sync', {}); toast('Pedido enviado ao PC da cliente (atende em até 5 minutos)'); pintaSync(await api('GET', '/api/sync/status')); }
+    catch (e) { toast(e.message, 'erro'); }
+    botSync.disabled = false; botSync.classList.remove('girando');
+  };
   const sair = async () => { if (pushSuportado()) { try { await pushDesativa(); } catch { /* segue */ } } await api('POST', '/api/logout', {}); ME = null; renderLogin(); };
   const botTema = h('button', { title: 'Tema claro/escuro', onclick: alternaTema }, ic('moon', 18)), botSair = h('button', { title: 'Sair', onclick: sair }, ic('logout', 18));
   const side = h('aside', { class: 'side' },
     h('div', { class: 'brand' }, logoImg('lgs auto'), h('small', { text: 'Ordem de Produção' + (CFG.versao ? ' · v' + CFG.versao : '') })),
     h('nav', {}, links.map(([k, t, i]) => h('a', { href: '#/' + k, class: ativo === k ? 'on' : '' }, ic(i, 19), t, k === 'ordens' ? cnt : null))),
-    h('div', { class: 'sp' }), ehProd() ? null : h('div', { class: 'sync' }, syncDot, syncTxt),
+    h('div', { class: 'sp' }), ehProd() ? null : h('div', { class: 'sync' }, syncDot, syncTxt, botSync),
     h('div', { class: 'usercard' }, h('div', { class: 'avatar', text: iniciais(ME.usuario) }), h('div', {}, h('b', { text: ME.usuario.toLowerCase() }), h('small', { text: papel })), h('div', { class: 'ib' }, botNotif(), botTema, botSair)));
   const mtop = h('div', { class: 'mtop' }, logoImg('lgt auto'), h('b', { text: 'Ordem de Produção' }),
     h('div', { class: 'ib' }, botNotif(), h('button', { onclick: alternaTema }, ic('moon', 18)), h('button', { onclick: sair }, ic('logout', 18))));
@@ -229,9 +242,7 @@ function shell(ativo, conteudo) {
     const n = r.porStatus.filter(x => ehProd() ? x.status !== 'Entregue' : ['Aberta', 'Em extrusão', 'Em corte e solda'].includes(x.status)).reduce((a, x) => a + x.n, 0);
     if (n) { cnt.textContent = n; cnt.hidden = false; }
     if (!r.sync) return;
-    const sy = r.sync, velho = sy.ultimoOk && Date.now() - Date.parse(sy.ultimoOk) > 3600e3;
-    syncDot.className = 'dot' + (!sy.ativo || velho ? ' off' : sy.erro ? ' err' : '');
-    syncTxt.textContent = !sy.ativo ? 'Serp: aguardando 1ª sincronização' : sy.erro ? 'Serp: falha na última leitura' : `Serp · ${num(sy.clientes)} clientes · ${atras(sy.ultimoOk)}`;
+    pintaSync(r.sync);
   }).catch(() => {});
 }
 function atras(iso) {
