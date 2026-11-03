@@ -986,14 +986,14 @@ async function viewLote(qs) {
 
 // ---------- usuarios (admin) ----------
 function definirSenha(u, depois) {
-  const min = CFG.senhaMinima || 8;
+  const min = CFG.senhaMinima || 1;
   const a = h('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Nova senha' }), b = h('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Repita a senha' });
   const err = h('div', { class: 'msg-err' });
-  const d = h('dialog', {}, h('h3', { text: 'Senha de acesso de ' + u.usuario }), h('p', { text: 'Use no mínimo ' + min + ' caracteres, misturando letras e números. Essa senha vale só para este sistema e não altera a senha do Serp.' }),
+  const d = h('dialog', {}, h('h3', { text: 'Senha de acesso de ' + u.usuario }), h('p', { text: 'Pode ser qualquer senha. Essa senha vale só para este sistema e não altera a senha do Serp.' }),
     h('div', { class: 'inp', style: { marginBottom: '10px' } }, a), h('div', { class: 'inp' }, b), err,
     h('div', { class: 'acts', style: { marginTop: '16px' } }, h('button', { class: 'btn', text: 'Cancelar', onclick: () => d.close() }),
       h('button', { class: 'btn pri', text: 'Salvar', onclick: async () => {
-        if (a.value.length < min) { err.textContent = 'A senha precisa ter pelo menos ' + min + ' caracteres.'; return; }
+        if (a.value.length < min) { err.textContent = min > 1 ? 'A senha precisa ter pelo menos ' + min + ' caracteres.' : 'Digite a senha.'; return; }
         if (a.value !== b.value) { err.textContent = 'As senhas não são iguais.'; return; }
         try { await api('PUT', '/api/usuarios/' + u.cod, { senha_web: a.value }); d.close(); toast('Senha de acesso salva'); depois(); } catch (x) { err.textContent = x.message; }
       } })));
