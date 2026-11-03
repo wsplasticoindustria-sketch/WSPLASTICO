@@ -803,7 +803,7 @@ function precoCard(l, comCliente) {
     h('div', { class: 'prinfo' }, [['Quantidade', num(l.qtd, l.qtd % 1 ? 2 : 0) + ' ' + und], ['Sem desconto', brl(l.preco)], ['Desconto', desc ? pctTxt(desc) : '—'], ['Custo', l.custo ? brl(l.custo) : '—'], ['Margem', pctTxt(mg)]]
       .map(([k, v]) => h('span', {}, k + ' ', h('b', { text: v })))), mais, det);
 }
-// pesquisa de vendas: aba (vendas | produtos | clientes | ultimos) + filtros. Tudo fica na URL (voltar do navegador funciona)
+// pesquisa de vendas: aba (vendas | clientes | ultimos) + filtros. Tudo fica na URL (voltar do navegador funciona)
 const FILTROS_VENDA = ['cliente', 'cq', 'produto', 'de', 'ate', 'numero', 'vendedor', 'cidade'];
 const PERIODOS = [['Tudo', null], ['7 dias', 7], ['30 dias', 30], ['90 dias', 90], ['6 meses', 182], ['Este mês', 'mes'], ['Mês passado', 'mesant']];
 function periodo(p) {
@@ -835,32 +835,6 @@ function vendaCard(v, fixo, pal) {
     h('div', { class: 'vditens' }, h('div', { class: 'vditem cab' }, ['Produto', 'Qtd', 'Preço un.', 'Total'].map(t => h('span', { text: t }))), v.itens.map(item)),
     v.desconto || v.frete ? h('div', { class: 'sub vdrod', text: [v.desconto ? 'Desconto na venda: ' + brl(v.desconto) : '', v.frete ? 'Frete: ' + brl(v.frete) : ''].filter(Boolean).join(' · ') }) : null);
 }
-// um produto: ultimo preco, faixa de preco e, ao tocar, quem comprou (cada venda)
-function produtoCard(p, F) {
-  const und = (p.und || 'un').toLowerCase(), lista = h('div', { class: 'pdlista', hidden: true });
-  const mais = h('div', { class: 'prmais' }, ic('users', 14), `Ver quem comprou (${p.clientes} ${p.clientes === 1 ? 'cliente' : 'clientes'}, ${p.vendas} ${p.vendas === 1 ? 'venda' : 'vendas'})`);
-  let carregou = false;
-  const abre = async () => {
-    lista.hidden = !lista.hidden; mais.lastChild.textContent = lista.hidden ? `Ver quem comprou (${p.clientes} ${p.clientes === 1 ? 'cliente' : 'clientes'}, ${p.vendas} ${p.vendas === 1 ? 'venda' : 'vendas'})` : 'Esconder';
-    if (carregou || lista.hidden) return; carregou = true;
-    lista.replaceChildren(h('div', { class: 'sub', text: 'Carregando…' }));
-    const qs = new URLSearchParams(); FILTROS_VENDA.filter(k => F[k] && k !== 'produto').forEach(k => qs.set(k, F[k])); qs.set('produto_cod', p.produto_cod);
-    try {
-      const r = await api('GET', '/api/vendas/compradores?' + qs);
-      lista.replaceChildren(h('div', { class: 'pdrow cab' }, ['Data', 'Cliente', 'Qtd', 'Preço un.'].map(t => h('span', { text: t }))),
-        ...r.map(x => h('div', { class: 'pdrow' }, h('span', { text: dt(x.data) }),
-          h('span', {}, linkCli(x.cliente_cod, x.cliente_nome), h('small', { text: ['Venda ' + x.cod, x.nota ? 'NF ' + x.nota : '', x.vendedor || ''].filter(Boolean).join(' · ') })),
-          h('span', { text: num(x.qtd, x.qtd % 1 ? 2 : 0) + ' ' + und }),
-          h('span', {}, h('b', { text: brl(x.preco_liq ?? x.preco) }), descPct(x.preco, x.preco_liq) ? h('s', { text: brl(x.preco) }) : null))));
-    } catch (e) { lista.replaceChildren(h('div', { class: 'msg-err', text: e.message })); carregou = false; }
-  };
-  return h('div', { class: 'card prcard', role: 'button', tabindex: 0, onclick: e => { if (!e.target.closest('.pdlista')) abre(); } },
-    h('div', { class: 'prtop' },
-      h('div', { class: 'grow' }, h('b', { class: 'prnome', text: p.descricao }), h('div', { class: 'sub', text: `cód. ${p.produto_cod} · última venda ${dt(p.ultima)} para ${p.ultimo_cliente}` })),
-      h('div', { class: 'prval' }, h('b', { text: brl(p.ultimo_preco) }), h('small', { text: 'último preço / ' + und }))),
-    h('div', { class: 'prinfo' }, [['Vendido', num(p.qtd, p.qtd % 1 ? 2 : 0) + ' ' + und], ['Faturado', brl(p.valor)], ['Menor preço', brl(p.pmin)], ['Maior preço', brl(p.pmax)]]
-      .map(([k, v]) => h('span', {}, k + ' ', h('b', { text: v })))), mais, lista);
-}
 function clienteCard(c) {
   return h('a', { class: 'card prclirow', href: '#/precos?cliente=' + c.cod }, h('div', { class: 'initials', text: iniciais(c.nome) }),
     h('div', { class: 'grow' }, h('b', { text: c.nome }), h('div', { class: 'sub', text: [c.cidade ? c.cidade + (c.uf ? '/' + c.uf : '') : '', 'última compra ' + dt(c.ultima) + ' (' + diasTxt(dias(c.ultima)) + ')'].filter(Boolean).join(' · ') })),
@@ -869,7 +843,7 @@ function clienteCard(c) {
 async function viewPrecos(qs) {
   const par = new URLSearchParams(qs), F = {};
   FILTROS_VENDA.forEach(k => (F[k] = par.get(k) || ''));
-  let aba = par.get('aba') || (F.cliente ? 'vendas' : (F.produto ? 'produtos' : 'vendas'));
+  let aba = par.get('aba') || 'vendas';
   const pg = { pagina: Number(par.get('pagina')) || 0, limite: 20 };
   const cli = F.cliente ? ((await api('GET', '/api/vendas/clientes?cliente=' + F.cliente))[0] || (await api('GET', '/api/vendas/ultimos-precos?cliente=' + F.cliente)).cliente) : null;
   const box = h('div'), resumo = h('div', { class: 'total' }), pagEl = h('div');
@@ -889,10 +863,6 @@ async function viewPrecos(qs) {
         const pal = palavras(F.produto);
         box.replaceChildren(...(r.linhas.length ? r.linhas.map(v => vendaCard(v, !!F.cliente, pal)) : [h('div', { class: 'tw' }, vazio('Nenhuma venda encontrada', 'Mude os filtros ou o período.'))]));
         pagEl.replaceChildren(pager(pg, r.total, () => { carrega(); window.scrollTo({ top: 0 }); }));
-      } else if (aba === 'produtos') {
-        const r = await api('GET', '/api/vendas/produtos?' + p); if (n !== seq) return;
-        resumo.replaceChildren(...[h('span', {}, h('b', { text: num(r.length) }), r.length === 1 ? ' produto' : ' produtos'), r.length >= 200 ? h('span', { class: 'sub', text: 'mostrando os 200 vendidos mais recentemente — use os filtros para refinar' }) : null].filter(Boolean));
-        box.replaceChildren(...(r.length ? r.map(x => produtoCard(x, F)) : [h('div', { class: 'tw' }, vazio('Nenhum produto encontrado', 'Tente outra palavra, o código do produto ou outro período.'))]));
       } else if (aba === 'clientes') {
         const r = await api('GET', '/api/vendas/clientes?' + p); if (n !== seq) return;
         resumo.replaceChildren(...[h('span', {}, h('b', { text: num(r.length) }), r.length === 1 ? ' cliente' : ' clientes'), h('span', {}, h('b', { text: brl(r.reduce((a, c) => a + c.total, 0)) }), ' vendidos')].filter(Boolean));
@@ -922,7 +892,7 @@ async function viewPrecos(qs) {
     h('div', { class: 'prlinha' }, F.cliente ? null : campoF('cq', 'Cliente', 'nome, código ou CNPJ', { cls: 'big' }), campoF('produto', 'Produto', 'ex.: saco 100 preto', { cls: 'big' })),
     h('div', { class: 'prper' }, h('small', { class: 'sub', text: 'Período:' }), chipsEl), avancado, h('div', { class: 'prbot' }, botAv, limpar));
   // --- abas ---
-  const ABAS = [['vendas', 'Vendas', 'clipboard'], ['produtos', 'Produtos', 'box'], ...(F.cliente ? [['ultimos', 'Últimos preços', 'tag']] : [['clientes', 'Clientes', 'building']])];
+  const ABAS = [['vendas', 'Vendas', 'clipboard'], ...(F.cliente ? [['ultimos', 'Últimos preços', 'tag']] : [['clientes', 'Clientes', 'building']])];
   if (!ABAS.some(a => a[0] === aba)) aba = 'vendas';
   const seg = h('div', { class: 'seg wrap prseg' }, ABAS.map(([k, t, i]) => h('button', { class: aba === k ? 'on' : '', onclick: () => { aba = k; pg.pagina = 0; seg.querySelectorAll('button').forEach((b, j) => b.classList.toggle('on', ABAS[j][0] === k)); carrega(); } }, ic(i, 16), t)));
   const cab = cli ? pageHead(cli.nome, [cli.cidade ? cli.cidade + (cli.uf ? '/' + cli.uf : '') : '', cli.vendas != null ? num(cli.vendas) + ' vendas · ' + brl(cli.total) + ' nos últimos 12 meses' : '', cli.ultima ? 'última compra ' + dt(cli.ultima) : ''].filter(Boolean).join(' · '),
