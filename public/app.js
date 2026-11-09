@@ -740,7 +740,7 @@ async function viewClientes(qs) {
   const box = h('div'), pagEl = h('div'), pg = { pagina: 0, limite: tamanhoSalvo() };
   const filtra = () => { pg.pagina = 0; carrega(); };
   const carrega = async () => {
-    const res = await api('GET', `/api/clientes?limite=${pg.limite}&pagina=${pg.pagina}&comOrdens=${so && !q.trim() ? 1 : 0}&ativo=${cad}&q=${encodeURIComponent(q)}`);   // ao digitar uma busca, acha qualquer cliente (com ou sem OPs) const r = res.linhas;
+    const res = await api('GET', `/api/clientes?limite=${pg.limite}&pagina=${pg.pagina}&comOrdens=${so && !q.trim() ? 1 : 0}&ativo=${cad}&q=${encodeURIComponent(q)}`); const r = res.linhas;   // ao digitar uma busca, acha qualquer cliente (com ou sem OPs)
     pagEl.replaceChildren(pager(pg, res.total, () => { carrega(); window.scrollTo({ top: 0 }); }));
     box.replaceChildren(!r.length ? h('div', { class: 'tw' }, vazio(so ? 'Nenhum cliente com ordens ainda' : 'Nenhum cliente encontrado', so ? 'Desmarque "Só com ordens" para ver todos os clientes do Serp.' : 'Tente outro nome.')) :
       h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Cliente' }), h('th', { text: 'Cidade' }), h('th', { class: 'n', text: 'OPs' }), h('th', { class: 'n', text: 'Andamento' }), h('th', { class: 'n', text: 'Prontas' }), h('th', { class: 'n', text: 'Entregues' }), h('th', { class: 'n', text: 'Kg pedido' }), h('th', { text: 'Produzido' }))),
