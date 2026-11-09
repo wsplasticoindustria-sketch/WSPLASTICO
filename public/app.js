@@ -416,6 +416,8 @@ async function viewOrdens(qs) {
   await carrega();
 }
 
+const tagInativo = c => c && c.ativo === 0 ? h('span', { class: 'pill st-Cancelada', style: { marginLeft: '8px', verticalAlign: 'middle' }, text: 'Inativo no Serp' }) : null;
+
 // ---------- consulta avancada de clientes (modal) ----------
 function lupaClientes(onPick) {
   return h('button', { class: 'lupa', type: 'button', title: 'Consulta avançada', 'aria-label': 'Consulta avançada de clientes', onclick: () => consultaClientes(onPick) }, ic('search', 18));
@@ -427,12 +429,13 @@ function consultaClientes(onPick) {
     if (!qs) { res.replaceChildren(h('div', { class: 'sub', text: 'Preencha um ou mais filtros para consultar.' })); info.textContent = ''; return; }
     const r = await api('GET', '/api/clientes?limite=50&comOrdens=0' + qs);
     info.textContent = r.total > 50 ? `Mostrando 50 de ${num(r.total)} — refine os filtros.` : num(r.total) + (r.total === 1 ? ' cliente' : ' clientes');
-    res.replaceChildren(...(r.linhas.length ? r.linhas.map(c => h('button', { type: 'button', class: 'avrow', onclick: () => { d.close(); onPick(c); } }, h('b', { text: c.nome }), h('small', { text: ['cód. ' + c.cod, c.cidade ? c.cidade + '/' + (c.uf || '') : '', c.doc, c.telefone].filter(Boolean).join(' · ') }))) : [h('div', { class: 'sub', text: 'Nenhum cliente encontrado.' })]));
+    res.replaceChildren(...(r.linhas.length ? r.linhas.map(c => h('button', { type: 'button', class: 'avrow', onclick: () => { d.close(); onPick(c); } }, h('b', { text: c.nome }, tagInativo(c)), h('small', { text: ['cód. ' + c.cod, c.cidade ? c.cidade + '/' + (c.uf || '') : '', c.doc, c.telefone].filter(Boolean).join(' · ') }))) : [h('div', { class: 'sub', text: 'Nenhum cliente encontrado.' })]));
   }, 250);
   const campo = (k, rot, ph, max) => h('label', { class: 'avc' }, h('span', { text: rot }), h('input', { placeholder: ph || '', maxlength: max, autocomplete: 'off', oninput: e => { f[k] = e.target.value.trim(); busca(); } }));
   const sit = h('select', { onchange: e => { f.situacao = e.target.value; busca(); } }, [['', 'Qualquer'], ['andamento', 'Com OP em andamento'], ['pronta', 'Com OP pronta'], ['entregue', 'Com OP entregue'], ['sem', 'Sem nenhuma OP']].map(([v, t]) => h('option', { value: v, text: t })));
+  const sitCad = h('select', { onchange: e => { f.ativo = e.target.value; busca(); } }, [['', 'Ativos e inativos'], ['1', 'Só ativos'], ['0', 'Só inativos']].map(([v, t]) => h('option', { value: v, text: t })));
   const d = h('dialog', { class: 'avdlg' }, h('h3', { text: 'Consulta avançada de clientes' }),
-    h('div', { class: 'avanc' }, campo('nome', 'Nome / razão social'), campo('cod', 'Código'), campo('doc', 'CPF / CNPJ', 'só números'), campo('tel', 'Telefone'), campo('cidade', 'Cidade'), campo('uf', 'UF', 'SP', 2), h('label', { class: 'avc' }, h('span', { text: 'Situação das OPs' }), sit)),
+    h('div', { class: 'avanc' }, campo('nome', 'Nome / razão social'), campo('cod', 'Código'), campo('doc', 'CPF / CNPJ', 'só números'), campo('tel', 'Telefone'), campo('cidade', 'Cidade'), campo('uf', 'UF', 'SP', 2), h('label', { class: 'avc' }, h('span', { text: 'Situação das OPs' }), sit), h('label', { class: 'avc' }, h('span', { text: 'Cadastro no Serp' }), sitCad)),
     info, res, h('div', { class: 'acts', style: { marginTop: '14px' } }, h('button', { class: 'btn', text: 'Fechar', onclick: () => d.close() })));
   d.addEventListener('close', () => d.remove()); document.body.append(d); d.showModal(); busca();
   d.querySelector('input').focus();
@@ -447,7 +450,7 @@ function clienteAuto(E, desab, onPick) {
     E.cliente_nome = inp.value; E.cliente_cod = null; mostra(); if (onPick && !inp.value.trim()) onPick();
     if (inp.value.trim().length < 2) { lst.hidden = true; return; }
     const r = (await api('GET', '/api/clientes?limite=10&q=' + encodeURIComponent(inp.value.trim()))).linhas;
-    lst.replaceChildren(...r.map(c => h('div', { onmousedown: e => { e.preventDefault(); E.cliente_cod = c.cod; E.cliente_nome = c.nome; inp.value = c.nome; lst.hidden = true; mostra(); if (onPick) onPick(); } }, c.nome, h('small', { text: [c.cidade ? c.cidade + '/' + (c.uf || '') : '', c.doc].filter(Boolean).join(' · ') }))));
+    lst.replaceChildren(...r.map(c => h('div', { onmousedown: e => { E.cliente_cod = c.cod; E.cliente_nome = c.nome; inp.value = c.nome; lst.hidden = true; mostra(); if (onPick) onPick(); } }, c.nome, h('small', { text: [c.ativo === 0 ? 'INATIVO no Serp' : '', c.cidade ? c.cidade + '/' + (c.uf || '') : '', c.doc].filter(Boolean).join(' · ') }))));
     lst.hidden = !r.length;
   }, 200);
   inp.addEventListener('input', busca); inp.addEventListener('blur', () => setTimeout(() => (lst.hidden = true), 150)); mostra();
@@ -733,22 +736,23 @@ function dialogoFichas(lista, titulo) {   // pergunta 1 ou 2 por folha e imprime
 
 // ---------- clientes ----------
 async function viewClientes(qs) {
-  const par = new URLSearchParams(qs); let q = par.get('q') || '', so = par.get('comOrdens') !== '0';
+  const par = new URLSearchParams(qs); let q = par.get('q') || '', so = par.get('comOrdens') !== '0', cad = '';
   const box = h('div'), pagEl = h('div'), pg = { pagina: 0, limite: tamanhoSalvo() };
   const filtra = () => { pg.pagina = 0; carrega(); };
   const carrega = async () => {
-    const res = await api('GET', `/api/clientes?limite=${pg.limite}&pagina=${pg.pagina}&comOrdens=${so ? 1 : 0}&q=${encodeURIComponent(q)}`); const r = res.linhas;
+    const res = await api('GET', `/api/clientes?limite=${pg.limite}&pagina=${pg.pagina}&comOrdens=${so && !q.trim() ? 1 : 0}&ativo=${cad}&q=${encodeURIComponent(q)}`);   // ao digitar uma busca, acha qualquer cliente (com ou sem OPs) const r = res.linhas;
     pagEl.replaceChildren(pager(pg, res.total, () => { carrega(); window.scrollTo({ top: 0 }); }));
     box.replaceChildren(!r.length ? h('div', { class: 'tw' }, vazio(so ? 'Nenhum cliente com ordens ainda' : 'Nenhum cliente encontrado', so ? 'Desmarque "Só com ordens" para ver todos os clientes do Serp.' : 'Tente outro nome.')) :
       h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Cliente' }), h('th', { text: 'Cidade' }), h('th', { class: 'n', text: 'OPs' }), h('th', { class: 'n', text: 'Andamento' }), h('th', { class: 'n', text: 'Prontas' }), h('th', { class: 'n', text: 'Entregues' }), h('th', { class: 'n', text: 'Kg pedido' }), h('th', { text: 'Produzido' }))),
         h('tbody', {}, r.map(c => { const pct = c.kg_pedido ? Math.min(100, Math.round((c.kg_produzido / c.kg_pedido) * 100)) : 0;
-          return h('tr', { class: 'click', onclick: () => (location.hash = '#/cliente/' + c.cod) }, h('td', {}, h('div', { class: 'cellrow' }, h('div', { class: 'initials', text: iniciais(c.nome) }), h('div', {}, h('span', { class: 'main', text: c.nome }), h('span', { class: 'sub2', text: 'cód. ' + c.cod })))),
+          return h('tr', { class: 'click', onclick: () => (location.hash = '#/cliente/' + c.cod) }, h('td', {}, h('div', { class: 'cellrow' }, h('div', { class: 'initials', text: iniciais(c.nome) }), h('div', {}, h('span', { class: 'main', text: c.nome }, tagInativo(c)), h('span', { class: 'sub2', text: 'cód. ' + c.cod })))),
             h('td', { text: c.cidade ? c.cidade + '/' + (c.uf || '') : '' }), h('td', { class: 'n', text: num(c.total) }), h('td', { class: 'n', text: num(c.andamento) }), h('td', { class: 'n', text: num(c.prontas) }), h('td', { class: 'n', text: num(c.entregues) }), h('td', { class: 'n', text: kg(c.kg_pedido) }),
             h('td', {}, c.kg_pedido ? h('div', { class: 'mini' }, h('i', { style: { width: pct + '%' } })) : '—')); })))));
   };
   const chk = h('input', { type: 'checkbox', checked: so, onchange: e => { so = e.target.checked; filtra(); } });
+  const selCad = h('select', { class: 'sel', 'aria-label': 'Cadastro no Serp', onchange: e => { cad = e.target.value; filtra(); } }, [['', 'Ativos e inativos'], ['1', 'Só ativos'], ['0', 'Só inativos']].map(([v, t]) => h('option', { value: v, text: t })));
   shell('clientes', [pageHead('Clientes', 'Lista do Serp, somente para consulta. Clique para ver os pedidos.'),
-    h('div', { class: 'tools' }, h('div', { class: 'inp search' }, lupaClientes(c => (location.hash = '#/cliente/' + c.cod)), h('input', { placeholder: 'Buscar cliente…', value: q, oninput: debounce(e => { q = e.target.value; filtra(); }) })), h('label', { class: 'sub', style: { display: 'flex', gap: '8px', alignItems: 'center' } }, chk, 'Só com ordens')), box, pagEl]);
+    h('div', { class: 'tools' }, h('div', { class: 'inp search' }, lupaClientes(c => (location.hash = '#/cliente/' + c.cod)), h('input', { placeholder: 'Buscar cliente…', value: q, oninput: debounce(e => { q = e.target.value; filtra(); }) })), selCad, h('label', { class: 'sub', style: { display: 'flex', gap: '8px', alignItems: 'center' } }, chk, 'Só com ordens')), box, pagEl]);
   await carrega();
 }
 async function viewCliente(cod, pg) {
@@ -761,7 +765,7 @@ async function viewCliente(cod, pg) {
       podeEditar() ? h('button', { class: 'btn', onclick: () => compartilhar({ tipo: 'cliente', ref: c.cod, de: resumoCli.filtro().de, ate: resumoCli.filtro().ate, fone: c.telefone, titulo: 'Enviar relatório a ' + c.nome, mensagem: l => 'Olá! Segue o relatório dos seus pedidos na ' + CFG.empresa + ': ' + l }) }, ic('chat', 17), 'Enviar ao cliente') : null,
       podeEditar() ? h('a', { class: 'btn', href: '#/ordem/lote?cliente=' + c.cod }, ic('copy', 17), 'Lançar várias') : null,
       podeEditar() ? h('a', { class: 'btn pri', href: '#/ordem/novo?cliente=' + c.cod }, ic('plus', 18), 'Nova OP') : null], ['#/clientes', 'Clientes']),
-    h('div', { class: 'card' }, h('div', { class: 'cli-head' }, h('div', { class: 'avatar lg', text: iniciais(c.nome) }), h('div', {}, h('b', { style: { fontSize: '17px' }, text: c.razao || c.nome }),
+    h('div', { class: 'card' }, h('div', { class: 'cli-head' }, h('div', { class: 'avatar lg', text: iniciais(c.nome) }), h('div', {}, h('b', { style: { fontSize: '17px' }, text: c.razao || c.nome }, tagInativo(c)),
       h('div', { class: 'sub', text: [c.doc, c.telefone, c.cidade ? c.cidade + '/' + (c.uf || '') : ''].filter(Boolean).join(' · ') })))),
     h('div', { class: 'pipe', style: { marginBottom: '18px' } }, ETAPAS.map(e => h('div', { class: 'stage st-' + slug(e.s) }, h('div', { class: 't' }, ic(e.i, 18), e.s), h('b', { text: num((por[e.s] || {}).n || 0) }), h('small', { text: kg((por[e.s] || {}).kg || 0) + ' kg' })))),
     h('h3', { style: { margin: '4px 0 12px' }, text: 'Resumo de produção' }), resumoCli.el,
