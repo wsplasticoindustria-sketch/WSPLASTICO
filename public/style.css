@@ -672,3 +672,9 @@ input[type=checkbox]:focus-visible,input[type=radio]:focus-visible{outline:2px s
 .callink{border:0;background:transparent;color:var(--aTx);font-weight:600;cursor:pointer;padding:6px 8px;border-radius:8px}.callink:hover:not(:disabled){background:var(--aSoft)}.callink:disabled{opacity:.4;cursor:not-allowed}
 :root[data-theme=dark] .calday.on,:root[data-theme=dark] .calday.on:hover:not(:disabled){color:#062a27}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]) .calday.on,:root:not([data-theme=light]) .calday.on:hover:not(:disabled){color:#062a27}}
+
+/* ===== cor da borda em foco: verde claro (o verde escuro da marca, em 1px, parecia uma linha preta dentro do anel) ===== */
+:root{--foco:#1fb5a1}
+:root[data-theme=dark]{--foco:#2dd4bf}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--foco:#2dd4bf}}
+.inp:focus-within,.inp:has(select.aberto),textarea.ta:focus,select.sel:focus,select.sel.aberto,.avc input:focus,.avc select:focus,.avc select.aberto{border-color:var(--foco)}
