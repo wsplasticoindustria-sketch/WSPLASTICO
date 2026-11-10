@@ -462,11 +462,50 @@ function clienteAuto(E, desab, onPick) {
   inp.addEventListener('input', busca); inp.addEventListener('blur', () => setTimeout(() => (lst.hidden = true), 150)); mostra();
   return h('div', { class: 'ac' }, h('label', { class: 'field' }, h('span', { class: 'l', text: 'Cliente' }), h('div', { class: 'inp' + (desab ? ' dis' : '') }, desab ? ic('building', 18) : lupaClientes(c => { E.cliente_cod = c.cod; E.cliente_nome = c.nome; inp.value = c.nome; mostra(); if (onPick) onPick(); }), inp)), lst, link);
 }
-function campoCor(E, desab) {   // lista fixa de cores; se a OP antiga tem outra cor, ela continua aparecendo
-  const extra = E.cor && !LISTA_CORES.some(c => c.toLowerCase() === String(E.cor).toLowerCase()) ? [E.cor] : [];
-  const atual = LISTA_CORES.find(c => c.toLowerCase() === String(E.cor || '').toLowerCase()) || E.cor || '';
-  return h('label', { class: 'field' }, h('span', { class: 'l', text: 'Cor' }), h('div', { class: 'inp' + (desab ? ' dis' : '') },
-    h('select', { disabled: desab, onchange: e => { E.cor = e.target.value || null; } }, h('option', { value: '', text: '—' }), [...LISTA_CORES, ...extra].map(c => h('option', { value: c, text: c, selected: c === atual })))));
+function campoCor(E, desab) {   // cores cadastradas (ver cadastroCores); se a OP antiga tem outra cor, ela continua aparecendo
+  let ver = -1;
+  const sel = h('select', { disabled: desab,
+    onpointerdown: () => { if (ver !== CORES_VER) pinta(); },   // outra ficha cadastrou cor nova: atualiza antes de abrir
+    onchange: e => { if (e.target.value === '__cad') { pinta(); cadastroCores(pinta); } else E.cor = e.target.value || null; } });
+  function pinta() {
+    ver = CORES_VER;
+    const extra = E.cor && !LISTA_CORES.some(c => c.toLowerCase() === String(E.cor).toLowerCase()) ? [E.cor] : [];
+    const atual = LISTA_CORES.find(c => c.toLowerCase() === String(E.cor || '').toLowerCase()) || E.cor || '';
+    sel.replaceChildren(h('option', { value: '', text: '—' }), ...[...LISTA_CORES, ...extra].map(c => h('option', { value: c, text: c, selected: c === atual })),
+      ...(podeEditar() && !desab ? [h('option', { value: '__cad', text: '+ Cadastrar cores…' })] : []));
+  }
+  pinta();
+  return h('label', { class: 'field' }, h('span', { class: 'l', text: 'Cor' }), h('div', { class: 'inp' + (desab ? ' dis' : '') }, sel));
+}
+// cadastro de cores (admin e escritorio): a lista vale para todas as OPs; tirar uma cor da lista nao mexe nas OPs que ja usam
+const TONS = ['#1f2933', '#4b5563', '#94a3b8', '#cbd5e1', '#f8fafc', '#efe8d6', '#d6b48a', '#b5651d', '#92400e', '#7f1d1d', '#dc2626', '#f97316', '#eab308', '#fde68a', '#d4af37', '#16a34a', '#86efac', '#0d9488', '#2563eb', '#93c5fd', '#1e3a8a', '#7c3aed', '#ec4899', '#f9a8d4'];
+function cadastroCores(depois) {
+  let tom = null, ocupado = false;
+  const err = h('div', { class: 'msg-err' }), lst = h('div', { class: 'corlst' }), pal = h('div', { class: 'corpal' });
+  const nome = h('input', { type: 'text', maxLength: 30, placeholder: 'Nome da cor (ex.: Cinza)', oninput: () => { const c = CORES[nome.value.trim().toLowerCase()]; if (c && TONS.includes(c)) { tom = c; pintaPal(); } err.textContent = ''; }, onkeydown: e => { if (e.key === 'Enter') { e.preventDefault(); adiciona(); } } });
+  const salva = async nova => {
+    if (ocupado) return false; ocupado = true; err.textContent = '';
+    try { aplicaCores(await api('PUT', '/api/cores', { cores: nova })); pintaLst(); if (depois) depois(); return true; } catch (x) { err.textContent = x.message; return false; } finally { ocupado = false; }
+  };
+  async function adiciona() {
+    const n = nome.value.replace(/\s+/g, ' ').trim();
+    if (!n) { err.textContent = 'Digite o nome da cor.'; nome.focus(); return; }
+    if (!tom) { err.textContent = 'Escolha o tom da cor nas bolinhas.'; return; }
+    if (await salva([...CORES_CAD, { nome: n.charAt(0).toUpperCase() + n.slice(1), hex: tom }])) { toast('Cor "' + n + '" cadastrada'); nome.value = ''; tom = null; pintaPal(); nome.focus(); }
+  }
+  function pintaPal() { pal.replaceChildren(...TONS.map(c => h('button', { type: 'button', class: 'cortom' + (c === tom ? ' on' : ''), style: { background: c }, 'aria-label': 'Tom ' + c, onclick: () => { tom = c; err.textContent = ''; pintaPal(); } }))); }
+  function pintaLst() {
+    lst.replaceChildren(...CORES_CAD.map(c => h('div', { class: 'coritem' }, h('i', { class: 'sw', style: { background: c.hex, borderColor: 'var(--bd2)' } }), h('span', { text: c.nome }),
+      h('button', { type: 'button', class: 'corx', title: 'Tirar da lista', 'aria-label': 'Tirar ' + c.nome + ' da lista', text: '×', onclick: async () => {
+        if (CORES_CAD.length < 2) { err.textContent = 'Deixe pelo menos uma cor na lista.'; return; }
+        if (await salva(CORES_CAD.filter(x => x !== c))) toast('Cor "' + c.nome + '" tirada da lista');
+      } }))));
+  }
+  const d = h('dialog', { class: 'cordlg' }, h('h3', { text: 'Cores' }), h('p', { text: 'Cores que aparecem na lista da ordem de produção. Tirar uma cor da lista não muda as ordens que já usam essa cor.' }),
+    lst, h('div', { class: 'cornova' }, h('b', { text: 'Nova cor' }), h('div', { class: 'inp' }, nome), pal, err),
+    h('div', { class: 'acts', style: { marginTop: '16px' } }, h('button', { class: 'btn', text: 'Fechar', onclick: () => { d.close(); d.remove(); } }), h('button', { class: 'btn pri', text: 'Adicionar cor', onclick: adiciona })));
+  pintaLst(); pintaPal();
+  d.addEventListener('close', () => d.remove()); document.body.append(d); d.showModal(); nome.focus();
 }
 function tilesLitros(E, desab) {
   const el = h('div', { class: 'tiles' }); const pinta = () => el.replaceChildren(...CFG.litros.map(l => h('button', { type: 'button', disabled: desab, class: 'tile' + (E.litros === l ? ' on' : ''), onclick: () => { E.litros = E.litros === l ? null : l; pinta(); } }, h('big', { text: l }), h('small', { text: 'litros' }))));
@@ -560,7 +599,8 @@ async function viewOrdem(id, qs) {
 }
 
 // ---------- resumo de producao ----------
-const LISTA_CORES = ['Marrom', 'Amarelo', 'Azul', 'Verde', 'Preto', 'Vermelho', 'Leitoso', 'Branco', 'Laranja', 'Canela'];
+let LISTA_CORES = ['Marrom', 'Amarelo', 'Azul', 'Verde', 'Preto', 'Vermelho', 'Leitoso', 'Branco', 'Laranja', 'Canela'], CORES_CAD = [], CORES_VER = 0;   // a lista de verdade vem do servidor (/api/cores)
+function aplicaCores(l) { CORES_CAD = l; LISTA_CORES = l.map(c => c.nome); for (const c of l) CORES[c.nome.toLowerCase()] = c.hex; CORES_VER++; }
 const CORES = { leitoso: '#efe8d6', canela: '#b5651d', preto: '#1f2933', azul: '#2563eb', verde: '#16a34a', vermelho: '#dc2626', amarelo: '#eab308', branco: '#f8fafc', transparente: '#cbd5e1', cinza: '#94a3b8', laranja: '#f97316', rosa: '#ec4899', roxo: '#7c3aed', marrom: '#92400e' };
 const cap = t => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 const isoLocal = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
@@ -1067,7 +1107,7 @@ async function rota() {
     return await viewPainel();
   } catch (e) { if (ME) shell('', h('div', { class: 'note warn' }, ic('alert', 18), e.message)); }
 }
-async function boot() { try { ME = await api('GET', '/api/me'); } catch { ME = null; } ME ? rota() : renderLogin(); }
+async function boot() { try { ME = await api('GET', '/api/me'); } catch { ME = null; } if (ME) { try { aplicaCores(await api('GET', '/api/cores')); } catch { /* fica a lista inicial */ } } ME ? rota() : renderLogin(); }
 window.addEventListener('hashchange', rota);
 (async () => { try { CFG = await api('GET', '/api/config'); } catch { CFG = { empresa: 'Ordem de Produção', status: [], litros: [], reforcos: [], formatos: [] }; } boot(); })();
 

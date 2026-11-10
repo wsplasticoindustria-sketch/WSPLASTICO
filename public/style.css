@@ -678,3 +678,13 @@ input[type=checkbox]:focus-visible,input[type=radio]:focus-visible{outline:2px s
 :root[data-theme=dark]{--foco:#238a80}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]){--foco:#238a80}}
 .inp:focus-within,.inp:has(select.aberto),textarea.ta:focus,select.sel:focus,select.sel.aberto,.avc input:focus,.avc select:focus,.avc select.aberto{border-color:var(--foco);box-shadow:0 0 0 3px var(--foco)}
+
+/* ===== cadastro de cores ===== */
+dialog.cordlg{max-width:440px}
+.corlst{display:flex;flex-wrap:wrap;gap:8px;max-height:190px;overflow:auto;margin-bottom:16px}
+.coritem{display:inline-flex;align-items:center;gap:7px;padding:5px 6px 5px 10px;border:1px solid var(--bd2);border-radius:999px;font-size:13.5px}
+.corx{border:0;background:transparent;color:var(--mut);width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:17px;line-height:1;padding:0}.corx:hover{background:var(--card2);color:var(--tx)}
+.cornova{border-top:1px solid var(--bd);padding-top:14px;display:grid;gap:10px}
+.corpal{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;justify-items:center}
+.cortom{width:30px;height:30px;border-radius:50%;border:1px solid var(--bd2);cursor:pointer;padding:0}
+.cortom:hover{transform:scale(1.1)}.cortom.on{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--a)}

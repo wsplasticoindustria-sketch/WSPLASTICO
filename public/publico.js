@@ -103,6 +103,7 @@
       const r = await fetch('/api/publico/' + m[1], { headers: { Accept: 'application/json' }, referrerPolicy: 'no-referrer' });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) return erro(d.erro || 'Link inválido ou expirado.');
+      Object.assign(CORES, d.cores || {});   // cores cadastradas pela empresa
       document.title = d.tipo === 'ordem' ? 'Pedido ' + d.ordem.numero + ' · ' + d.empresa : 'Acompanhamento · ' + d.empresa;
       monta(d, d.tipo === 'ordem' ? viewOrdem(d) : d.tipo === 'cliente' ? viewCliente(d) : viewResumo(d));
     } catch { erro('Sem conexão. Tente de novo em instantes.'); }
