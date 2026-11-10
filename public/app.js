@@ -21,6 +21,12 @@ const num = (v, d = 0) => (v == null || v === '' ? '' : Number(v).toLocaleString
 const kg = v => (v == null || v === '' ? '' : num(v, 1));
 const dec = v => (v == null || v === '' ? '' : String(v).replace('.', ','));
 const pn = v => Number(String(v == null ? '' : v).replace(',', '.')) || 0;
+// Qnt de Kg = gramatura x pacotes (igual a planilha). Pedido por kg: digita a espessura e o kg direto, sem gramatura/pacote.
+function calculaKg(o, k, inpKg) {
+  if (k !== 'gramatura' && k !== 'qtd_pacote') return;
+  const g = pn(o.gramatura), p = pn(o.qtd_pacote); if (!g || !p) return;
+  o.qtd_kg = Math.round(g * p * 1000) / 1000; if (inpKg) inpKg.value = dec(o.qtd_kg);
+}
 const dt = s => (s ? s.slice(0, 10).split('-').reverse().join('/') : '');
 const hoje = () => new Date().toISOString().slice(0, 10);
 const slug = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '_');
@@ -484,10 +490,12 @@ async function viewOrdem(id, qs) {
   const prod = ehProd(), leitura = ME.papel === 'vendedor', bloq = leitura || (o.status === 'Cancelada' && ME.papel !== 'admin'), dEsc = prod || bloq;
   const dExt = bloq || (prod && o.status !== 'Em extrusão'), dCor = bloq || (prod && o.status !== 'Em corte e solda'), dEnt = bloq || (prod && !['Pronta', 'Entregue'].includes(o.status));   // producao preenche so a etapa em que a OP esta
   const E = { ...o };
+  let inpKg = null;
   const campo = (rot, k, op = {}) => {
     const dis = op.dis !== undefined ? op.dis : dEsc;
-    return h('label', { class: 'field' }, h('span', { class: 'l', text: rot }), h('div', { class: 'inp' + (dis ? ' dis' : '') },
-      h('input', { type: 'text', inputMode: op.dec ? 'decimal' : (op.int ? 'numeric' : null), value: dec(E[k]), disabled: dis, oninput: e => { E[k] = e.target.value; atualiza(); } }), op.suf ? h('span', { class: 'suf', text: op.suf }) : null));
+    const inp = h('input', { type: 'text', inputMode: op.dec ? 'decimal' : (op.int ? 'numeric' : null), value: dec(E[k]), disabled: dis, oninput: e => { E[k] = e.target.value; calculaKg(E, k, inpKg); atualiza(); } });
+    if (k === 'qtd_kg') inpKg = inp;
+    return h('label', { class: 'field' }, h('span', { class: 'l', text: rot }), h('div', { class: 'inp' + (dis ? ' dis' : '') }, inp, op.suf ? h('span', { class: 'suf', text: op.suf }) : null));
   };
   const progBar = h('i'), progLbl = h('div', { class: 'lbl' }), aparas = h('div', { class: 'sub', style: { marginTop: '10px' } }), entrNota = h('div', { class: 'sub', style: { marginTop: '10px' } });
   function atualiza() {
@@ -949,8 +957,12 @@ async function viewLote(qs) {
   if (par.get('copiar')) { origem = await api('GET', '/api/ordens/' + Number(par.get('copiar'))); E.cliente_cod = origem.cliente_cod; E.cliente_nome = origem.cliente_nome; itens = [novoItem(origem)]; }
   else if (par.get('cliente')) { try { const r = await api('GET', '/api/clientes/' + Number(par.get('cliente'))); E.cliente_cod = r.cliente.cod; E.cliente_nome = r.cliente.nome; } catch { /* sem cliente */ } }
   const lista = h('div', { class: 'lote' }), resumoEl = h('div', { class: 'loteres' }), resumoEl2 = h('div', { class: 'loteres' });
-  const campo = (rot, it, k, op = {}) => h('label', { class: 'field' }, h('span', { class: 'l', text: rot }), h('div', { class: 'inp' },
-    h('input', { type: 'text', inputMode: op.dec ? 'decimal' : (op.int ? 'numeric' : null), value: dec(it[k]), oninput: e => { it[k] = e.target.value; soma(); } }), op.suf ? h('span', { class: 'suf', text: op.suf }) : null));
+  const kgInp = new WeakMap();   // campo "Qnt de Kg" de cada item, para receber o calculo gramatura x pacotes
+  const campo = (rot, it, k, op = {}) => {
+    const inp = h('input', { type: 'text', inputMode: op.dec ? 'decimal' : (op.int ? 'numeric' : null), value: dec(it[k]), oninput: e => { it[k] = e.target.value; calculaKg(it, k, kgInp.get(it)); soma(); } });
+    if (k === 'qtd_kg') kgInp.set(it, inp);
+    return h('label', { class: 'field' }, h('span', { class: 'l', text: rot }), h('div', { class: 'inp' }, inp, op.suf ? h('span', { class: 'suf', text: op.suf }) : null));
+  };
   const escolha = (rot, it, k, opcoes, fmt = x => x) => h('label', { class: 'field' }, h('span', { class: 'l', text: rot }), h('div', { class: 'inp' },
     h('select', { onchange: e => { const v = e.target.value; it[k] = v === '' ? null : (typeof opcoes[0] === 'number' ? Number(v) : v); } }, h('option', { value: '', text: '—' }), opcoes.map(x => h('option', { value: x, text: fmt(x), selected: it[k] === x })))));
   function soma() {
