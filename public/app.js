@@ -1080,3 +1080,60 @@ window.addEventListener('hashchange', rota);
   let ag = 0;
   new MutationObserver(() => { if (ag) return; ag = requestAnimationFrame(() => { ag = 0; document.querySelectorAll('table').forEach(marca); }); }).observe(document.body, { childList: true, subtree: true });
 })();
+
+/* listas suspensas: o campo continua sendo o <select> de sempre; so a lista aberta deixa de ser a do sistema operacional.
+   Vale para mouse/teclado. Em celular e tablet (toque) fica o seletor do proprio aparelho, que ja e adequado ao dedo. */
+(function () {
+  if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  let aberto = null;   // { sel, el, foco }
+  const fecha = () => { if (!aberto) return; aberto.el.remove(); aberto.sel.classList.remove('aberto'); aberto = null; };
+  const marca = i => {
+    const its = aberto.el.children; if (!its.length) return;
+    aberto.foco = Math.max(0, Math.min(its.length - 1, i));
+    [...its].forEach((x, j) => x.classList.toggle('foco', j === aberto.foco));
+    its[aberto.foco].scrollIntoView({ block: 'nearest' });
+  };
+  const escolhe = i => {
+    const sel = aberto.sel, mudou = sel.selectedIndex !== i; fecha();
+    if (mudou) { sel.selectedIndex = i; sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true })); }
+  };
+  function abre(sel) {
+    fecha(); if (sel.disabled || sel.multiple || sel.size > 1) return;
+    const el = h('div', { class: 'selpop', role: 'listbox' }, [...sel.options].map((o, i) => h('div', { class: 'selop' + (i === sel.selectedIndex ? ' on' : ''), role: 'option', onclick: () => escolhe(i), onmousemove: () => { if (aberto && aberto.foco !== i) marca(i); } }, h('span', { text: o.text }))));
+    (sel.closest('dialog') || document.body).append(el);   // dentro do dialogo, senao ficaria atras dele
+    const r = sel.getBoundingClientRect(), abaixo = window.innerHeight - r.bottom - 12, acima = r.top - 12, paraCima = abaixo < Math.min(el.scrollHeight, 200) && acima > abaixo;
+    el.style.maxHeight = Math.max(120, Math.min(320, paraCima ? acima : abaixo)) + 'px'; el.style.minWidth = r.width + 'px';
+    el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - el.offsetWidth - 8)) + 'px';
+    if (paraCima) el.style.bottom = (window.innerHeight - r.top + 6) + 'px'; else el.style.top = (r.bottom + 6) + 'px';
+    aberto = { sel, el, foco: -1 }; sel.classList.add('aberto'); marca(Math.max(0, sel.selectedIndex));
+  }
+  document.addEventListener('mousedown', e => {
+    const sel = e.target.closest ? e.target.closest('select') : null;
+    if (sel && !sel.multiple && sel.size <= 1) { e.preventDefault(); if (sel.disabled) return; sel.focus(); if (aberto && aberto.sel === sel) fecha(); else abre(sel); return; }
+    if (aberto && aberto.el.contains(e.target)) e.preventDefault();   // clicar na lista nao tira o foco do campo (senao ela fecharia antes do clique)
+    else if (aberto) fecha();
+  }, true);
+  let digitado = '', tDig;
+  document.addEventListener('keydown', e => {
+    const sel = e.target && e.target.tagName === 'SELECT' ? e.target : null; if (!sel || sel.multiple || sel.size > 1) return;
+    if (!aberto || aberto.sel !== sel) {
+      if (['Enter', ' ', 'ArrowDown', 'ArrowUp', 'F4'].includes(e.key)) { e.preventDefault(); abre(sel); }
+      return;
+    }
+    const n = aberto.el.children.length;
+    if (e.key === 'ArrowDown') { e.preventDefault(); marca(aberto.foco + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); marca(aberto.foco - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); marca(0); }
+    else if (e.key === 'End') { e.preventDefault(); marca(n - 1); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); escolhe(aberto.foco); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fecha(); }
+    else if (e.key === 'Tab') fecha();
+    else if (e.key.length === 1) {   // digitar pula para a opcao que comeca com o texto
+      e.preventDefault(); clearTimeout(tDig); digitado += e.key.toLowerCase(); tDig = setTimeout(() => (digitado = ''), 700);
+      const i = [...sel.options].findIndex(o => o.text.trim().toLowerCase().startsWith(digitado)); if (i >= 0) marca(i);
+    }
+  }, true);
+  document.addEventListener('focusout', e => { if (aberto && e.target === aberto.sel) fecha(); });
+  document.addEventListener('scroll', e => { if (aberto && !aberto.el.contains(e.target)) fecha(); }, true);
+  window.addEventListener('resize', fecha); window.addEventListener('hashchange', fecha);
+})();
