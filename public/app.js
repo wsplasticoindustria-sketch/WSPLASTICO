@@ -310,6 +310,8 @@ async function viewPainel() {
 
 // ---------- listas de ordens ----------
 function medidas(o) { const p = [o.largura, o.comprimento].filter(x => x != null).map(x => num(x, x % 1 ? 1 : 0)); return p.length ? p.join(' × ') : ''; }
+const n1 = v => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 3 });   // como foi digitado: 3 / 3,5 / 0,08
+function espGram(o) { return [o.espessura != null ? 'Esp. ' + n1(o.espessura) : '', o.gramatura != null ? 'Gram. ' + n1(o.gramatura) : ''].filter(Boolean).join(' · '); }   // aparece na lista sem abrir a OP
 function produtoTxt(o) { return [o.litros ? o.litros + ' L' : null, o.reforco, o.formato].filter(Boolean).join(' · ') || o.produto; }
 function qtd(p, k) { return [p != null ? num(p) + ' pct' : '', k != null ? kg(k) + ' kg' : ''].filter(Boolean).join(' · '); }
 const SEL = new Set();   // OPs marcadas na lista (imprimir fichas / agrupar)
@@ -322,7 +324,7 @@ function tabelaOrdens(linhas, opc = {}) {
       h('td', {}, opc.selecionavel ? h('input', { type: 'checkbox', class: 'selk', checked: SEL.has(o.id), 'aria-label': 'Selecionar OP ' + o.numero, onclick: e => e.stopPropagation(), onchange: e => { e.target.checked ? SEL.add(o.id) : SEL.delete(o.id); if (opc.onSel) opc.onSel(); } }) : null,
         h('span', { class: 'opn', text: o.numero }), h('span', { class: 'sub2', text: dt(o.data) }), o.grupo_n > 1 ? h('span', { class: 'grp', title: 'Grupo ' + o.grupo }, ic('link', 12), 'grupo ' + o.grupo + ' · ' + o.grupo_n + ' OPs') : null),
       opc.semCliente ? null : h('td', {}, h('div', { class: 'cellrow' }, h('div', { class: 'initials', text: iniciais(o.cliente_nome) }), h('span', { class: 'main', text: o.cliente_nome }))),
-      h('td', {}, h('span', { class: 'main', text: produtoTxt(o) }), h('span', { class: 'sub2', text: [o.cor, o.espessura != null ? 'esp ' + num(o.espessura, 2) : ''].filter(Boolean).join(' · ') })),
+      h('td', {}, h('span', { class: 'main', text: produtoTxt(o) }), h('span', { class: 'sub2', text: [o.cor, espGram(o)].filter(Boolean).join(' · ') })),
       cp ? null : h('td', { text: medidas(o) }), h('td', { class: 'n', text: cp ? (o.qtd_kg != null ? kg(o.qtd_kg) + ' kg' : '') : qtd(o.qtd_pacote, o.qtd_kg) }), cp ? null : h('td', { class: 'n', text: qtd(o.corte_pacotes, o.corte_kg) || '—' }),
       h('td', {}, pill(o.status), o.entregue_em ? h('span', { class: 'sub2', text: 'em ' + dt(o.entregue_em) }) : null))))));
 }
@@ -336,7 +338,7 @@ function cartao(o, recarrega) {
     h('div', { class: 'top' }, h('span', { class: 'opn', text: 'OP ' + o.numero }), h('span', { class: 'topd' }, h('span', { class: 'sub', text: diasTxt(dias(o.data)) }),
       podeEditar() ? h('a', { class: 'dup', href: '#/ordem/lote?copiar=' + o.id, title: 'Duplicar esta OP', 'aria-label': 'Duplicar a OP ' + o.numero, draggable: false, onclick: e => e.stopPropagation() }, ic('copy', 15)) : null)), h('div', { class: 'cli', text: o.cliente_nome }),
     h('div', { class: 'tags' }, [o.litros ? o.litros + ' L' : null, o.reforco, o.formato].filter(Boolean).map(t => h('span', { class: 'tag', text: t })), o.grupo_n > 1 ? h('span', { class: 'tag grp' }, ic('link', 11), 'grupo ' + o.grupo_n) : null),
-    h('div', { class: 'meta' }, h('span', { text: [medidas(o), o.cor].filter(Boolean).join(' · ') }), h('span', { class: 'num', text: o.qtd_kg != null ? kg(o.qtd_kg) + ' kg' : '' })),
+    h('div', { class: 'meta' }, h('span', { text: [medidas(o), o.cor, espGram(o)].filter(Boolean).join(' · ') }), h('span', { class: 'num', text: o.qtd_kg != null ? kg(o.qtd_kg) + ' kg' : '' })),
     o.qtd_kg ? h('div', { class: 'mini' }, h('i', { style: { width: pct + '%' } })) : null,
     pode || ant ? h('div', { class: 'kact' },
       ant ? h('button', { class: 'btn sm ghost back', title: 'Voltar para ' + ant, 'aria-label': 'Voltar para ' + ant, onclick: mover(ant) }, ic('left', 15), 'Voltar') : null,
