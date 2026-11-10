@@ -1137,3 +1137,59 @@ window.addEventListener('hashchange', rota);
   document.addEventListener('scroll', e => { if (aberto && !aberto.el.contains(e.target)) fecha(); }, true);
   window.addEventListener('resize', fecha); window.addEventListener('hashchange', fecha);
 })();
+
+/* calendario proprio dos campos de data (no lugar do calendario do sistema operacional). O campo continua sendo o <input type=date>:
+   da para digitar a data normalmente. Vale para mouse/teclado; em celular e tablet (toque) fica o calendario do proprio aparelho. */
+(function () {
+  if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  document.documentElement.classList.add('calprop');   // o CSS esconde o icone nativo (que abriria o calendario do sistema) e mostra o nosso
+  const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const iso = (a, m, d) => `${a}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const hojeIso = () => { const d = new Date(); return iso(d.getFullYear(), d.getMonth(), d.getDate()); };
+  const ehData = el => el && el.tagName === 'INPUT' && el.type === 'date';
+  let ab = null;   // { inp, el, ano, mes }
+  const fecha = () => { if (!ab) return; ab.el.remove(); ab.inp.classList.remove('aberto'); ab = null; };
+  const escolhe = v => { const inp = ab.inp, mudou = inp.value !== v; fecha(); if (mudou) { inp.value = v; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); } };
+  const anda = n => { const d = new Date(ab.ano, ab.mes + n, 1); ab.ano = d.getFullYear(); ab.mes = d.getMonth(); pinta(); };
+  const bot = (rot, titulo, fn) => h('button', { type: 'button', class: 'calnav', title: titulo, 'aria-label': titulo, onclick: fn, text: rot });
+  function pinta() {
+    const { inp, el, ano, mes } = ab, sel = inp.value, hj = hojeIso(), prim = new Date(ano, mes, 1).getDay(), nd = new Date(ano, mes + 1, 0).getDate();
+    const fora = v => (inp.min && v < inp.min) || (inp.max && v > inp.max);
+    const dias = [...Array(prim).fill(null), ...Array.from({ length: nd }, (_, i) => i + 1)].map(d => {
+      if (!d) return h('span', {});
+      const v = iso(ano, mes, d);
+      return h('button', { type: 'button', class: 'calday' + (v === sel ? ' on' : '') + (v === hj ? ' hoje' : ''), disabled: fora(v), text: String(d), onclick: () => escolhe(v) });
+    });
+    el.replaceChildren(
+      h('div', { class: 'calhd' }, bot('«', 'Ano anterior', () => anda(-12)), bot('‹', 'Mês anterior', () => anda(-1)), h('b', { text: MESES[mes] + ' de ' + ano }), bot('›', 'Próximo mês', () => anda(1)), bot('»', 'Próximo ano', () => anda(12))),
+      h('div', { class: 'calgrid caldow' }, ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(x => h('span', { text: x }))),
+      h('div', { class: 'calgrid' }, dias),
+      h('div', { class: 'calft' }, h('button', { type: 'button', class: 'callink', text: 'Limpar', onclick: () => escolhe('') }), h('button', { type: 'button', class: 'callink', text: 'Hoje', disabled: fora(hj), onclick: () => escolhe(hj) })));
+  }
+  function abre(inp) {
+    if (ab && ab.inp === inp) return; fecha(); if (inp.disabled || inp.readOnly) return;
+    const base = /^\d{4}-\d{2}-\d{2}$/.test(inp.value) ? inp.value : hojeIso();
+    const el = h('div', { class: 'calpop', role: 'dialog', 'aria-label': 'Calendário' });
+    (inp.closest('dialog') || document.body).append(el);   // dentro do dialogo, senao ficaria atras dele
+    ab = { inp, el, ano: Number(base.slice(0, 4)), mes: Number(base.slice(5, 7)) - 1 }; inp.classList.add('aberto'); pinta();
+    const r = (inp.closest('.inp') || inp).getBoundingClientRect(), alt = el.offsetHeight, paraCima = window.innerHeight - r.bottom - 12 < alt && r.top - 12 > alt;
+    el.style.left = Math.max(8, Math.min(r.left, window.innerWidth - el.offsetWidth - 8)) + 'px';
+    if (paraCima) el.style.bottom = (window.innerHeight - r.top + 6) + 'px'; else el.style.top = (r.bottom + 6) + 'px';
+  }
+  document.addEventListener('mousedown', e => {
+    if (ab && ab.el.contains(e.target)) { e.preventDefault(); return; }   // clicar no calendario nao tira o foco do campo
+    if (ehData(e.target)) abre(e.target); else fecha();
+  }, true);
+  document.addEventListener('keydown', e => {
+    if (!ehData(e.target)) return;
+    if (e.key === 'F4' || e.key === ' ' || (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp'))) { e.preventDefault(); if (ab && ab.inp === e.target) fecha(); else abre(e.target); }   // atalhos que abririam o calendario do sistema
+    else if (e.key === 'Escape' && ab) { e.preventDefault(); e.stopPropagation(); fecha(); }
+    else if (e.key === 'Enter' || e.key === 'Tab') fecha();
+  }, true);
+  document.addEventListener('input', e => {   // digitou a data no campo: o calendario acompanha
+    if (ab && e.target === ab.inp && /^\d{4}-\d{2}-\d{2}$/.test(ab.inp.value)) { ab.ano = Number(ab.inp.value.slice(0, 4)); ab.mes = Number(ab.inp.value.slice(5, 7)) - 1; pinta(); }
+  });
+  document.addEventListener('focusout', e => { if (ab && e.target === ab.inp) fecha(); });
+  document.addEventListener('scroll', e => { if (ab && !ab.el.contains(e.target)) fecha(); }, true);
+  window.addEventListener('resize', fecha); window.addEventListener('hashchange', fecha);
+})();
